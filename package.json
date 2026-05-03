@@ -1,0 +1,19 @@
+{
+  "name": "barbershop-app",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix server install && npm --prefix client install && npm --prefix client run build && npm --prefix server run db:generate && npm --prefix server run build",
+    "start": "npm --prefix server run migrate:deploy && node server/dist/index.js",
+    "setup": "npm install && npm --prefix server install && npm --prefix client install",
+    "db:setup": "npm --prefix server run db:migrate && npm --prefix server run db:generate",
+    "db:studio": "npm --prefix server run db:studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

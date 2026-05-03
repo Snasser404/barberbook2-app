@@ -1,0 +1,79 @@
+import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { z } from 'zod'
+import { prisma } from '../lib/prisma'
+import { authenticate, AuthRequest } from '../middleware/auth'
+
+const router = Router()
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().min(2),
+  phone: z.string().optional(),
+  role: z.enum(['CUSTOMER', 'BARBER']).default('CUSTOMER'),
+})
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+})
+
+router.post('/register', async (req, res) => {
+  try {
+    const data = registerSchema.parse(req.body)
+    const existing = await prisma.user.findUnique({ where: { email: data.email } })
+    if (existing) { res.status(400).json({ error: 'Email already in use' }); return }
+
+    const hashed = await bcrypt.hash(data.password, 10)
+    const user = await prisma.user.create({
+      data: { ...data, password: hashed },
+      select: { id: true, email: true, name: true, role: true, phone: true, avatar: true },
+    })
+    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+    res.json({ user, token })
+  } catch (err: any) {
+    if (err.name === 'ZodError') { res.status(400).json({ error: err.errors }); return }
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.post('/login', async (req, res) => {
+  try {
+    const data = loginSchema.parse(req.body)
+    const user = await prisma.user.findUnique({ where: { email: data.email } })
+    if (!user) { res.status(401).json({ error: 'Invalid credentials' }); return }
+
+    const valid = await bcrypt.compare(data.password, user.password)
+    if (!valid) { res.status(401).json({ error: 'Invalid credentials' }); return }
+
+    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+    const { password: _pw, ...userWithoutPassword } = user
+    res.json({ user: userWithoutPassword, token })
+  } catch (err: any) {
+    if (err.name === 'ZodError') { res.status(400).json({ error: err.errors }); return }
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.get('/me', authenticate, async (req: AuthRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId },
+    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true },
+  })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+  res.json(user)
+})
+
+router.put('/me', authenticate, async (req: AuthRequest, res) => {
+  const { name, phone } = req.body
+  const user = await prisma.user.update({
+    where: { id: req.userId },
+    data: { name, phone },
+    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true },
+  })
+  res.json(user)
+})
+
+export default router

@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+uploads/*
+!uploads/.gitkeep
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local editor / tool config
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Logs
+*.log
