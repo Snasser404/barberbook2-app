@@ -12,6 +12,7 @@ Thumbs.db
 
 # Local editor / tool config
 .claude/settings.local.json
+.claude/worktrees/
 .vscode/
 .idea/
 
