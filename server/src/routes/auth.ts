@@ -67,10 +67,14 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
 })
 
 router.put('/me', authenticate, async (req: AuthRequest, res) => {
-  const { name, phone } = req.body
+  const { name, phone, avatar } = req.body
   const user = await prisma.user.update({
     where: { id: req.userId },
-    data: { name, phone },
+    data: {
+      name: name !== undefined ? name : undefined,
+      phone: phone !== undefined ? phone : undefined,
+      avatar: avatar !== undefined ? avatar : undefined,
+    },
     select: { id: true, email: true, name: true, role: true, phone: true, avatar: true },
   })
   res.json(user)

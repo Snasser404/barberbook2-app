@@ -73,13 +73,14 @@ router.put('/:id', authenticate, requireBarber, async (req: AuthRequest, res) =>
   const shop = await prisma.barberShop.findUnique({ where: { id: req.params.id } })
   if (!shop || shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { name, address, description, phone, openingTime, closingTime, latitude, longitude } = req.body
+  const { name, address, description, phone, openingTime, closingTime, latitude, longitude, logo } = req.body
   const updated = await prisma.barberShop.update({
     where: { id: req.params.id },
     data: {
       name, address, description, phone, openingTime, closingTime,
       latitude: latitude !== undefined ? (latitude === null ? null : Number(latitude)) : undefined,
       longitude: longitude !== undefined ? (longitude === null ? null : Number(longitude)) : undefined,
+      logo: logo !== undefined ? logo : undefined,
     },
   })
   res.json(updated)
@@ -249,6 +250,15 @@ router.get('/:shopId/reviews', async (req, res) => {
 router.post('/:shopId/reviews', authenticate, requireCustomer, async (req: AuthRequest, res) => {
   const { rating, comment } = req.body
   if (!rating || rating < 1 || rating > 5) { res.status(400).json({ error: 'Rating must be 1-5' }); return }
+
+  // Production gate: must have completed an appointment at this shop
+  const completedAppt = await prisma.appointment.findFirst({
+    where: { customerId: req.userId!, shopId: req.params.shopId, status: 'COMPLETED' },
+  })
+  if (!completedAppt) {
+    res.status(403).json({ error: 'You can only review shops where you have completed an appointment' })
+    return
+  }
 
   const existing = await prisma.review.findUnique({
     where: { customerId_shopId: { customerId: req.userId!, shopId: req.params.shopId } },

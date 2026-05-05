@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/client'
+import AvatarUploader from '../components/AvatarUploader'
 
 export default function CustomerProfile() {
   const { user, updateUser } = useAuth()
-  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' })
+  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', avatar: user?.avatar || '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -26,19 +27,33 @@ export default function CustomerProfile() {
     }
   }
 
+  const handleAvatarChange = async (url: string | null) => {
+    setForm({ ...form, avatar: url || '' })
+    // Save immediately so the avatar persists right away
+    try {
+      const { data } = await api.put('/auth/me', { avatar: url })
+      updateUser(data)
+    } catch {}
+  }
+
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-primary mb-6">My Profile</h1>
       <div className="card p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold">
-            {user?.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="font-semibold text-lg">{user?.name}</p>
-            <p className="text-gray-500 text-sm">{user?.email}</p>
-            <span className="badge bg-primary/10 text-primary text-xs mt-1">{user?.role}</span>
-          </div>
+        <div className="mb-6">
+          <p className="font-semibold text-lg">{user?.name}</p>
+          <p className="text-gray-500 text-sm">{user?.email}</p>
+          <span className="badge bg-primary/10 text-primary text-xs mt-1 inline-block">{user?.role}</span>
+        </div>
+
+        <div className="mb-6 pb-6 border-b">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Profile picture</label>
+          <AvatarUploader
+            value={form.avatar}
+            onChange={handleAvatarChange}
+            fallback={user?.name.charAt(0).toUpperCase() || '?'}
+            size={96}
+          />
         </div>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">{error}</div>}

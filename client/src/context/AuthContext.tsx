@@ -5,8 +5,8 @@ import { User } from '../types'
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (data: { email: string; password: string; name: string; phone?: string; role: string }) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
+  register: (data: { email: string; password: string; name: string; phone?: string; role: string }) => Promise<User>
   logout: () => void
   updateUser: (u: User) => void
 }
@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
     setUser(data.user)
+    return data.user as User
   }
 
   const register = async (formData: { email: string; password: string; name: string; phone?: string; role: string }) => {
@@ -42,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
     setUser(data.user)
+    return data.user as User
   }
 
   const logout = () => {

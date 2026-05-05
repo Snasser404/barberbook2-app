@@ -17,8 +17,14 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      await login(form.email, form.password)
-      navigate(from, { replace: true })
+      const user = await login(form.email, form.password)
+      // Role-aware redirect
+      const target = from !== '/'
+        ? from
+        : user.role === 'BARBER' ? '/barber'
+        : user.role === 'STAFF' ? '/staff'
+        : '/'
+      navigate(target, { replace: true })
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed')
     } finally {

@@ -31,7 +31,12 @@ export default function ShopCard({ shop, distanceKm }: Props) {
       </div>
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-gray-900 text-lg leading-tight">{shop.name}</h3>
+          <div className="flex items-start gap-2 min-w-0">
+            {shop.logo && (
+              <img src={shop.logo} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0 -mt-0.5" />
+            )}
+            <h3 className="font-semibold text-gray-900 text-lg leading-tight truncate">{shop.name}</h3>
+          </div>
           {shop.offers && shop.offers.length > 0 && (
             <span className="badge bg-accent/20 text-amber-800 shrink-0">
               {shop.offers.length} offer{shop.offers.length > 1 ? 's' : ''}

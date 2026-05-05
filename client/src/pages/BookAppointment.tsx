@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import api from '../api/client'
-import { BarberShop, Service } from '../types'
+import { BarberShop, Service, Staff } from '../types'
+import StarRating from '../components/StarRating'
 
 export default function BookAppointment() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const preselectedService = searchParams.get('serviceId')
+  const preselectedStaff = searchParams.get('staffId')
 
   const [shop, setShop] = useState<BarberShop | null>(null)
+  const [staff, setStaff] = useState<Staff[]>([])
   const [selectedService, setSelectedService] = useState<Service | null>(null)
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)  // null = "any barber"
   const [date, setDate] = useState('')
   const [slots, setSlots] = useState<string[]>([])
   const [selectedSlot, setSelectedSlot] = useState('')
@@ -30,6 +34,12 @@ export default function BookAppointment() {
         if (svc) setSelectedService(svc)
       }
     }).finally(() => setLoading(false))
+    api.get(`/shops/${id}/staff`).then((r) => {
+      setStaff(r.data)
+      if (preselectedStaff && r.data.some((s: Staff) => s.id === preselectedStaff)) {
+        setSelectedStaffId(preselectedStaff)
+      }
+    }).catch(() => {})
   }, [id])
 
   useEffect(() => {
@@ -50,6 +60,7 @@ export default function BookAppointment() {
       await api.post('/appointments', {
         shopId: id,
         serviceId: selectedService.id,
+        staffId: selectedStaffId || undefined,
         date,
         time: selectedSlot,
         notes: notes || undefined,
@@ -61,6 +72,8 @@ export default function BookAppointment() {
       setSubmitting(false)
     }
   }
+
+  const selectedStaff = selectedStaffId ? staff.find((s) => s.id === selectedStaffId) : null
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
   if (!shop) return <div className="text-center py-20">Shop not found</div>
@@ -95,9 +108,51 @@ export default function BookAppointment() {
           </div>
         </div>
 
+        {/* Staff selection (optional, only when shop has team) */}
+        {staff.length > 0 && (
+          <div className="card p-5">
+            <h2 className="font-semibold text-gray-900 mb-3">2. Choose your barber</h2>
+            <div className="space-y-2">
+              <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${selectedStaffId === null ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="staff" className="hidden" checked={selectedStaffId === null} onChange={() => setSelectedStaffId(null)} />
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedStaffId === null ? 'border-primary' : 'border-gray-300'}`}>
+                  {selectedStaffId === null && <div className="w-2 h-2 rounded-full bg-primary" />}
+                </div>
+                <div>
+                  <p className="font-medium text-sm">No preference</p>
+                  <p className="text-xs text-gray-400">Any available barber</p>
+                </div>
+              </label>
+              {staff.map((s) => (
+                <label key={s.id} className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${selectedStaffId === s.id ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <input type="radio" name="staff" className="hidden" checked={selectedStaffId === s.id} onChange={() => setSelectedStaffId(s.id)} />
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedStaffId === s.id ? 'border-primary' : 'border-gray-300'}`}>
+                    {selectedStaffId === s.id && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  {s.avatar ? (
+                    <img src={s.avatar} alt={s.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-primary text-accent flex items-center justify-center font-bold shrink-0">{s.name.charAt(0).toUpperCase()}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{s.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <StarRating rating={Math.round(s.rating)} size="sm" />
+                      <span className="text-xs text-gray-500">{s.rating.toFixed(1)} ({s.reviewCount})</span>
+                    </div>
+                    {s.specialties && (
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{s.specialties.split(',').slice(0, 3).map(x => x.trim()).join(' · ')}</p>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Date selection */}
         <div className="card p-5">
-          <h2 className="font-semibold text-gray-900 mb-3">2. Pick a date</h2>
+          <h2 className="font-semibold text-gray-900 mb-3">{staff.length > 0 ? '3' : '2'}. Pick a date</h2>
           <input
             type="date"
             className="input"
@@ -112,7 +167,7 @@ export default function BookAppointment() {
         {/* Time slot */}
         {date && selectedService && (
           <div className="card p-5">
-            <h2 className="font-semibold text-gray-900 mb-3">3. Choose a time</h2>
+            <h2 className="font-semibold text-gray-900 mb-3">{staff.length > 0 ? '4' : '3'}. Choose a time</h2>
             {slotsLoading ? (
               <div className="flex items-center gap-2 text-gray-400 text-sm"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" /> Loading slots...</div>
             ) : slots.length === 0 ? (
@@ -137,7 +192,7 @@ export default function BookAppointment() {
         {/* Notes */}
         {selectedSlot && (
           <div className="card p-5">
-            <h2 className="font-semibold text-gray-900 mb-3">4. Any notes? (optional)</h2>
+            <h2 className="font-semibold text-gray-900 mb-3">{staff.length > 0 ? '5' : '4'}. Any notes? (optional)</h2>
             <textarea className="input resize-none" rows={3} placeholder="E.g. reference photo, specific style notes..." value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         )}
@@ -149,6 +204,7 @@ export default function BookAppointment() {
             <div className="space-y-1 text-sm text-gray-600">
               <p><span className="font-medium">Shop:</span> {shop.name}</p>
               <p><span className="font-medium">Service:</span> {selectedService.name}</p>
+              <p><span className="font-medium">Barber:</span> {selectedStaff ? selectedStaff.name : 'No preference'}</p>
               <p><span className="font-medium">Date:</span> {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               <p><span className="font-medium">Time:</span> {selectedSlot}</p>
             </div>

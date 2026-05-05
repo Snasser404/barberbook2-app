@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../../api/client'
 import { Appointment, AppointmentStatus } from '../../types'
+import AppointmentPhotos from '../../components/AppointmentPhotos'
 
 const statusColors: Record<AppointmentStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -97,6 +98,8 @@ export default function ManageAppointments() {
                         <span className={`badge ${statusColors[appt.status]} mt-1`}>{appt.status}</span>
                       </div>
                     </div>
+
+                    <AppointmentPhotos appointmentId={appt.id} label="Photos from customer" />
 
                     {appt.status === 'PENDING' && (
                       <div className="flex gap-2 mt-3 pt-3 border-t">

@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/client'
 import { BarberShop, ShopImage } from '../../types'
+import AvatarUploader from '../../components/AvatarUploader'
 
 export default function ManageShop() {
   const navigate = useNavigate()
   const [shop, setShop] = useState<BarberShop | null>(null)
-  const [form, setForm] = useState({ name: '', address: '', description: '', phone: '', openingTime: '09:00', closingTime: '18:00', latitude: null as number | null, longitude: null as number | null })
+  const [form, setForm] = useState({ name: '', address: '', description: '', phone: '', openingTime: '09:00', closingTime: '18:00', latitude: null as number | null, longitude: null as number | null, logo: null as string | null })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -18,8 +19,8 @@ export default function ManageShop() {
     api.get('/shops/mine').then((r) => {
       if (r.data) {
         setShop(r.data)
-        const { name, address, description, phone, openingTime, closingTime, latitude, longitude } = r.data
-        setForm({ name, address, description: description || '', phone: phone || '', openingTime, closingTime, latitude: latitude ?? null, longitude: longitude ?? null })
+        const { name, address, description, phone, openingTime, closingTime, latitude, longitude, logo } = r.data
+        setForm({ name, address, description: description || '', phone: phone || '', openingTime, closingTime, latitude: latitude ?? null, longitude: longitude ?? null, logo: logo ?? null })
       }
     }).catch(() => {})
   }, [])
@@ -104,6 +105,17 @@ export default function ManageShop() {
       {saved && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm mb-4">Saved!</div>}
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-4 mb-8">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Shop logo</label>
+          <AvatarUploader
+            value={form.logo}
+            onChange={(url) => setForm({ ...form, logo: url })}
+            fallback="✂"
+            shape="square"
+            size={88}
+          />
+          <p className="text-xs text-gray-500 mt-2">Square image shown next to your shop name. Use the photos section below for cover banner & gallery.</p>
+        </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Shop name *</label>

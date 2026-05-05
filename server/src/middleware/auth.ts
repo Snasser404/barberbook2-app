@@ -28,3 +28,8 @@ export function requireCustomer(req: AuthRequest, res: Response, next: NextFunct
   if (req.userRole !== 'CUSTOMER') { res.status(403).json({ error: 'Customers only' }); return }
   next()
 }
+
+export function requireStaff(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (req.userRole !== 'STAFF') { res.status(403).json({ error: 'Staff only' }); return }
+  next()
+}

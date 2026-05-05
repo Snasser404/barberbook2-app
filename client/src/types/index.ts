@@ -1,4 +1,4 @@
-export type Role = 'CUSTOMER' | 'BARBER'
+export type Role = 'CUSTOMER' | 'BARBER' | 'STAFF'
 export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
 
 export interface User {
@@ -20,6 +20,7 @@ export interface BarberShop {
   openingTime: string
   closingTime: string
   coverImage?: string
+  logo?: string | null
   rating: number
   reviewCount: number
   latitude?: number | null
@@ -65,6 +66,7 @@ export interface Appointment {
   customerId: string
   shopId: string
   serviceId: string
+  staffId?: string | null
   date: string
   time: string
   status: AppointmentStatus
@@ -72,7 +74,53 @@ export interface Appointment {
   createdAt: string
   shop?: Pick<BarberShop, 'id' | 'name' | 'address' | 'coverImage'>
   service?: Service
+  staff?: Pick<Staff, 'id' | 'name' | 'avatar'>
   customer?: Pick<User, 'id' | 'name' | 'phone' | 'avatar'>
+}
+
+export interface Staff {
+  id: string
+  shopId: string
+  name: string
+  bio?: string | null
+  avatar?: string | null
+  specialties?: string | null
+  rating: number
+  reviewCount: number
+  isActive: boolean
+  createdAt: string
+  shop?: Pick<BarberShop, 'id' | 'name' | 'address'>
+  reviews?: StaffReview[]
+}
+
+export interface StaffReview {
+  id: string
+  customerId: string
+  staffId: string
+  rating: number
+  comment?: string
+  createdAt: string
+  customer?: Pick<User, 'id' | 'name' | 'avatar'>
+}
+
+export type PhotoType = 'INSPIRATION' | 'COMPLETED'
+
+export interface CustomerPhoto {
+  id: string
+  customerId: string
+  url: string
+  caption?: string | null
+  type: PhotoType
+  appointmentId?: string | null
+  appointment?: {
+    id: string
+    date: string
+    time: string
+    shop?: { id: string; name: string }
+    staff?: { id: string; name: string } | null
+    service?: { id: string; name: string }
+  }
+  createdAt: string
 }
 
 export interface Review {

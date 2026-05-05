@@ -4,7 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { authenticate } from '../middleware/auth'
 
-const uploadDir = path.join(__dirname, '../../../uploads')
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../../uploads')
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
 
 const storage = multer.diskStorage({

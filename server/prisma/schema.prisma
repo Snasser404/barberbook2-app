@@ -18,9 +18,12 @@ model User {
   createdAt DateTime @default(now())
 
   shop         BarberShop?
+  staffProfile Staff?
   appointments Appointment[]
   reviews      Review[]
   favorites    Favorite[]
+  staffReviews StaffReview[]
+  photos       CustomerPhoto[]
 }
 
 model BarberShop {
@@ -34,6 +37,7 @@ model BarberShop {
   openingTime String   @default("09:00")
   closingTime String   @default("18:00")
   coverImage  String?
+  logo        String?
   rating      Float    @default(0)
   reviewCount Int      @default(0)
   latitude    Float?
@@ -46,6 +50,39 @@ model BarberShop {
   appointments Appointment[]
   reviews      Review[]
   favorites    Favorite[]
+  staff        Staff[]
+}
+
+model Staff {
+  id          String     @id @default(cuid())
+  shopId      String
+  shop        BarberShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  userId      String?    @unique
+  user        User?      @relation(fields: [userId], references: [id])
+  name        String
+  bio         String?
+  avatar      String?
+  specialties String?    // comma-separated tags e.g. "Fades,Beards,Hot shaves"
+  rating      Float      @default(0)
+  reviewCount Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  appointments Appointment[]
+  reviews      StaffReview[]
+}
+
+model StaffReview {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id])
+  staffId    String
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, staffId])
 }
 
 model ShopImage {
@@ -90,11 +127,27 @@ model Appointment {
   shop       BarberShop @relation(fields: [shopId], references: [id])
   serviceId  String
   service    Service  @relation(fields: [serviceId], references: [id])
+  staffId    String?
+  staff      Staff?   @relation(fields: [staffId], references: [id])
   date       String
   time       String
   status     String   @default("PENDING")
   notes      String?
   createdAt  DateTime @default(now())
+
+  photos     CustomerPhoto[]
+}
+
+model CustomerPhoto {
+  id            String       @id @default(cuid())
+  customerId    String
+  customer      User         @relation(fields: [customerId], references: [id])
+  url           String
+  caption       String?
+  type          String       @default("INSPIRATION") // INSPIRATION or COMPLETED
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
 }
 
 model Review {

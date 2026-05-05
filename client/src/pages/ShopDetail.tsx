@@ -1,31 +1,46 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
-import { BarberShop, Review } from '../types'
+import { BarberShop, Review, Appointment, Staff } from '../types'
 import StarRating from '../components/StarRating'
 import { useAuth } from '../context/AuthContext'
+
+type TabKey = 'services' | 'team' | 'gallery' | 'reviews'
 
 export default function ShopDetail() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const [shop, setShop] = useState<BarberShop | null>(null)
+  const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'services' | 'gallery' | 'reviews'>('services')
+  const initialTab = (searchParams.get('tab') as TabKey) || 'services'
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [isFavorite, setIsFavorite] = useState(false)
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' })
   const [submittingReview, setSubmittingReview] = useState(false)
   const [reviewError, setReviewError] = useState('')
+  const [hasCompletedAppt, setHasCompletedAppt] = useState(false)
 
   useEffect(() => {
     api.get(`/shops/${id}`)
       .then((r) => setShop(r.data))
       .finally(() => setLoading(false))
+    api.get(`/shops/${id}/staff`).then((r) => setStaff(r.data)).catch(() => {})
     if (user?.role === 'CUSTOMER') {
       api.get('/favorites').then((r) => setIsFavorite(r.data.some((s: BarberShop) => s.id === id)))
+      // Check if customer has completed an appointment at this shop (gates review submission)
+      api.get('/appointments').then((r) => {
+        const completed = r.data.some((a: Appointment) => a.shopId === id && a.status === 'COMPLETED')
+        setHasCompletedAppt(completed)
+      })
     }
   }, [id, user])
+
+  const myReview = user?.role === 'CUSTOMER' && shop?.reviews?.find((r) => r.customerId === user.id)
+  const canSubmitReview = user?.role === 'CUSTOMER' && hasCompletedAppt && !myReview
 
   const toggleFavorite = async () => {
     if (!user) { navigate('/login'); return }
@@ -72,7 +87,10 @@ export default function ShopDetail() {
         </div>
         <div className="flex-1">
           <div className="flex items-start justify-between">
-            <h1 className="text-3xl font-bold text-primary">{shop.name}</h1>
+            <div className="flex items-center gap-3">
+              {shop.logo && <img src={shop.logo} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
+              <h1 className="text-3xl font-bold text-primary">{shop.name}</h1>
+            </div>
             {user?.role === 'CUSTOMER' && (
               <button onClick={toggleFavorite} className={`text-2xl transition-transform hover:scale-110 ${isFavorite ? 'text-red-500' : 'text-gray-300'}`}>
                 {isFavorite ? '♥' : '♡'}
@@ -109,15 +127,15 @@ export default function ShopDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex gap-6">
-          {(['services', 'gallery', 'reviews'] as const).map((tab) => (
+      <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+        <div className="flex gap-6 min-w-max">
+          {(['services', 'team', 'gallery', 'reviews'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium capitalize border-b-2 transition-colors ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+              className={`pb-3 text-sm font-medium capitalize border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
             >
-              {tab} {tab === 'reviews' ? `(${shop.reviewCount})` : tab === 'gallery' ? `(${shop.images?.length || 0})` : `(${shop.services?.length || 0})`}
+              {tab} {tab === 'reviews' ? `(${shop.reviewCount})` : tab === 'gallery' ? `(${shop.images?.length || 0})` : tab === 'team' ? `(${staff.length})` : `(${shop.services?.length || 0})`}
             </button>
           ))}
         </div>
@@ -145,6 +163,44 @@ export default function ShopDetail() {
         </div>
       )}
 
+      {/* Team */}
+      {activeTab === 'team' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {staff.length === 0 ? (
+            <p className="text-gray-400 col-span-3 text-center py-8">This shop hasn't added their team yet</p>
+          ) : (
+            staff.map((s) => (
+              <Link key={s.id} to={`/staff/${s.id}`} className="card p-5 hover:shadow-md transition-shadow group">
+                <div className="flex items-start gap-4">
+                  {s.avatar ? (
+                    <img src={s.avatar} alt={s.name} className="w-16 h-16 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-primary text-accent flex items-center justify-center text-2xl font-bold shrink-0">
+                      {s.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-primary transition-colors">{s.name}</h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <StarRating rating={Math.round(s.rating)} size="sm" />
+                      <span className="text-xs text-gray-500">{s.rating.toFixed(1)} ({s.reviewCount})</span>
+                    </div>
+                    {s.specialties && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {s.specialties.split(',').slice(0, 3).map((sp) => (
+                          <span key={sp} className="text-xs bg-accent/15 text-amber-800 px-2 py-0.5 rounded-full">{sp.trim()}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {s.bio && <p className="text-sm text-gray-500 mt-3 line-clamp-2">{s.bio}</p>}
+              </Link>
+            ))
+          )}
+        </div>
+      )}
+
       {/* Gallery */}
       {activeTab === 'gallery' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -160,9 +216,13 @@ export default function ShopDetail() {
       {/* Reviews */}
       {activeTab === 'reviews' && (
         <div className="space-y-6">
-          {user?.role === 'CUSTOMER' && (
+          {/* Review submission states */}
+          {canSubmitReview && (
             <div className="card p-5">
-              <h3 className="font-semibold mb-3">Leave a review</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">✓ Verified visit</span>
+                <h3 className="font-semibold">Leave a review</h3>
+              </div>
               {reviewError && <p className="text-red-500 text-sm mb-2">{reviewError}</p>}
               <form onSubmit={submitReview} className="space-y-3">
                 <StarRating rating={reviewForm.rating} size="lg" interactive onChange={(r) => setReviewForm({ ...reviewForm, rating: r })} />
@@ -177,6 +237,27 @@ export default function ShopDetail() {
                   {submittingReview ? 'Submitting...' : 'Submit review'}
                 </button>
               </form>
+            </div>
+          )}
+          {user?.role === 'CUSTOMER' && myReview && (
+            <div className="card p-5 bg-blue-50 border-blue-200">
+              <p className="text-sm text-blue-900">
+                <span className="font-semibold">Your review</span> — submitted on {new Date(myReview.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+          {user?.role === 'CUSTOMER' && !hasCompletedAppt && !myReview && (
+            <div className="card p-5 bg-gray-50 border-gray-200">
+              <p className="text-sm text-gray-600">
+                💈 Want to leave a review? You'll be able to once you've completed an appointment here.
+              </p>
+            </div>
+          )}
+          {!user && (
+            <div className="card p-5 bg-gray-50 border-gray-200">
+              <p className="text-sm text-gray-600">
+                <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link> as a customer to leave a review (after a completed visit).
+              </p>
             </div>
           )}
 

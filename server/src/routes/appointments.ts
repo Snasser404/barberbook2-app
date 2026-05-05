@@ -11,8 +11,23 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       include: {
         shop: { select: { id: true, name: true, address: true, coverImage: true } },
         service: true,
+        staff: { select: { id: true, name: true, avatar: true } },
       },
       orderBy: [{ date: 'desc' }, { time: 'desc' }],
+    })
+    res.json(appointments)
+  } else if (req.userRole === 'STAFF') {
+    // Staff sees only appointments assigned to them
+    const staff = await prisma.staff.findUnique({ where: { userId: req.userId } })
+    if (!staff) { res.json([]); return }
+    const appointments = await prisma.appointment.findMany({
+      where: { staffId: staff.id },
+      include: {
+        customer: { select: { id: true, name: true, phone: true, avatar: true } },
+        service: true,
+        staff: { select: { id: true, name: true, avatar: true } },
+      },
+      orderBy: [{ date: 'asc' }, { time: 'asc' }],
     })
     res.json(appointments)
   } else {
@@ -23,6 +38,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       include: {
         customer: { select: { id: true, name: true, phone: true, avatar: true } },
         service: true,
+        staff: { select: { id: true, name: true, avatar: true } },
       },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
     })
@@ -31,7 +47,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
 })
 
 router.post('/', authenticate, requireCustomer, async (req: AuthRequest, res) => {
-  const { shopId, serviceId, date, time, notes } = req.body
+  const { shopId, serviceId, staffId, date, time, notes } = req.body
   if (!shopId || !serviceId || !date || !time) {
     res.status(400).json({ error: 'shopId, serviceId, date, and time are required' })
     return
@@ -41,9 +57,23 @@ router.post('/', authenticate, requireCustomer, async (req: AuthRequest, res) =>
   const service = await prisma.service.findUnique({ where: { id: serviceId } })
   if (!service) { res.status(404).json({ error: 'Service not found' }); return }
 
+  // Validate staff belongs to this shop, if provided
+  if (staffId) {
+    const staff = await prisma.staff.findUnique({ where: { id: staffId } })
+    if (!staff || staff.shopId !== shopId) {
+      res.status(400).json({ error: 'Staff member not part of this shop' })
+      return
+    }
+  }
+
   const slotMin = parseInt(time.split(':')[0]) * 60 + parseInt(time.split(':')[1])
+  // If staff specified, only check their conflicts; otherwise check shop-wide
   const conflicting = await prisma.appointment.findFirst({
-    where: { shopId, date, status: { in: ['PENDING', 'CONFIRMED'] } },
+    where: {
+      shopId, date,
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      ...(staffId ? { staffId } : {}),
+    },
     include: { service: true },
   })
 
@@ -56,10 +86,11 @@ router.post('/', authenticate, requireCustomer, async (req: AuthRequest, res) =>
   }
 
   const appointment = await prisma.appointment.create({
-    data: { customerId: req.userId!, shopId, serviceId, date, time, notes },
+    data: { customerId: req.userId!, shopId, serviceId, staffId: staffId || null, date, time, notes },
     include: {
       shop: { select: { id: true, name: true, address: true } },
       service: true,
+      staff: { select: { id: true, name: true, avatar: true } },
     },
   })
   res.status(201).json(appointment)
@@ -84,11 +115,17 @@ router.put('/:id/status', authenticate, async (req: AuthRequest, res) => {
 
   const isOwner = appointment.shop.ownerId === req.userId
   const isCustomer = appointment.customerId === req.userId
+  let isAssignedStaff = false
+  if (req.userRole === 'STAFF') {
+    const staff = await prisma.staff.findUnique({ where: { userId: req.userId } })
+    isAssignedStaff = !!staff && appointment.staffId === staff.id
+  }
 
-  if (!isOwner && !isCustomer) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!isOwner && !isCustomer && !isAssignedStaff) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const allowed: Record<string, string[]> = {
     BARBER: ['CONFIRMED', 'CANCELLED', 'COMPLETED'],
+    STAFF: ['CONFIRMED', 'CANCELLED', 'COMPLETED'],
     CUSTOMER: ['CANCELLED'],
   }
   if (!allowed[req.userRole!]?.includes(status)) {

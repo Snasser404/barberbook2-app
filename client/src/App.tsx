@@ -9,11 +9,15 @@ import BookAppointment from './pages/BookAppointment'
 import CustomerBookings from './pages/CustomerBookings'
 import CustomerProfile from './pages/CustomerProfile'
 import Favorites from './pages/Favorites'
+import StaffProfile from './pages/StaffProfile'
+import MyPhotos from './pages/MyPhotos'
 import BarberDashboard from './pages/barber/BarberDashboard'
 import ManageShop from './pages/barber/ManageShop'
 import ManageServices from './pages/barber/ManageServices'
 import ManageOffers from './pages/barber/ManageOffers'
 import ManageAppointments from './pages/barber/ManageAppointments'
+import ManageStaff from './pages/barber/ManageStaff'
+import StaffDashboard from './pages/staff/StaffDashboard'
 
 function ProtectedRoute({ children, role }: { children: JSX.Element; role?: string }) {
   const { user, loading } = useAuth()
@@ -33,15 +37,19 @@ function AppRoutes() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/shops/:id" element={<ShopDetail />} />
+          <Route path="/staff/:id" element={<StaffProfile />} />
           <Route path="/shops/:id/book" element={<ProtectedRoute role="CUSTOMER"><BookAppointment /></ProtectedRoute>} />
           <Route path="/bookings" element={<ProtectedRoute role="CUSTOMER"><CustomerBookings /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><CustomerProfile /></ProtectedRoute>} />
           <Route path="/favorites" element={<ProtectedRoute role="CUSTOMER"><Favorites /></ProtectedRoute>} />
+          <Route path="/my-photos" element={<ProtectedRoute role="CUSTOMER"><MyPhotos /></ProtectedRoute>} />
           <Route path="/barber" element={<ProtectedRoute role="BARBER"><BarberDashboard /></ProtectedRoute>} />
           <Route path="/barber/shop" element={<ProtectedRoute role="BARBER"><ManageShop /></ProtectedRoute>} />
           <Route path="/barber/services" element={<ProtectedRoute role="BARBER"><ManageServices /></ProtectedRoute>} />
           <Route path="/barber/offers" element={<ProtectedRoute role="BARBER"><ManageOffers /></ProtectedRoute>} />
           <Route path="/barber/appointments" element={<ProtectedRoute role="BARBER"><ManageAppointments /></ProtectedRoute>} />
+          <Route path="/barber/staff" element={<ProtectedRoute role="BARBER"><ManageStaff /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute role="STAFF"><StaffDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

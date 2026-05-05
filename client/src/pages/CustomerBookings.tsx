@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
 import { Appointment, AppointmentStatus } from '../types'
+import AppointmentPhotos from '../components/AppointmentPhotos'
 
 const statusColors: Record<AppointmentStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -92,6 +93,11 @@ export default function CustomerBookings() {
                       <p className="text-gray-500 text-sm">{appt.shop?.address}</p>
                       <p className="text-gray-700 text-sm mt-1">{appt.service?.name} — <span className="font-medium">${appt.service?.price}</span></p>
                       <p className="text-gray-400 text-sm">{appt.service?.duration} min</p>
+                      {appt.staff && (
+                        <p className="text-gray-500 text-sm mt-1">
+                          with <Link to={`/staff/${appt.staff.id}`} className="text-primary hover:underline">{appt.staff.name}</Link>
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -101,6 +107,7 @@ export default function CustomerBookings() {
                   </div>
                 </div>
                 {appt.notes && <p className="text-sm text-gray-500 mt-3 border-t pt-3">📝 {appt.notes}</p>}
+                <AppointmentPhotos appointmentId={appt.id} label="Your photos for this visit" />
                 {(appt.status === 'PENDING' || appt.status === 'CONFIRMED') && (
                   <div className="mt-3 flex items-center justify-between flex-wrap gap-2 border-t pt-3">
                     {isLate ? (
@@ -116,6 +123,17 @@ export default function CustomerBookings() {
                     >
                       {isLate ? `Cancel ($${fee.toFixed(2)} fee)` : 'Cancel appointment'}
                     </button>
+                  </div>
+                )}
+                {appt.status === 'COMPLETED' && (
+                  <div className="mt-3 flex items-center justify-between flex-wrap gap-2 border-t pt-3">
+                    <p className="text-xs text-blue-700">✓ Visit completed — how was it?</p>
+                    <Link
+                      to={`/shops/${appt.shopId}?tab=reviews`}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      Leave a review →
+                    </Link>
                   </div>
                 )}
               </div>

@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
-import { BarberShop, Appointment } from '../../types'
+import { BarberShop, Appointment, Review } from '../../types'
 import StarRating from '../../components/StarRating'
 
 export default function BarberDashboard() {
   const [shop, setShop] = useState<BarberShop | null | undefined>(undefined)
   const [upcoming, setUpcoming] = useState<Appointment[]>([])
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [showProModal, setShowProModal] = useState(false)
 
   useEffect(() => {
-    api.get('/shops/mine').then((r) => setShop(r.data)).catch(() => setShop(null))
+    api.get('/shops/mine').then((r) => {
+      setShop(r.data)
+      if (r.data?.id) {
+        api.get(`/shops/${r.data.id}/reviews`).then((rev) => setReviews(rev.data.slice(0, 3)))
+      }
+    }).catch(() => setShop(null))
     api.get('/appointments').then((r) => {
       const today = new Date().toISOString().split('T')[0]
       setUpcoming(r.data.filter((a: Appointment) => a.date >= today && (a.status === 'PENDING' || a.status === 'CONFIRMED')).slice(0, 5))
@@ -53,11 +60,42 @@ export default function BarberDashboard() {
             <p className="font-semibold text-lg">Get more bookings with BarberBook Pro</p>
             <p className="text-sm text-white/70 mt-0.5">Featured listings · Automated SMS reminders · Analytics · No-show protection</p>
           </div>
-          <button className="bg-accent text-primary font-semibold px-5 py-2.5 rounded-lg hover:bg-accent/90 transition-colors text-sm whitespace-nowrap">
+          <button onClick={() => setShowProModal(true)} className="bg-accent text-primary font-semibold px-5 py-2.5 rounded-lg hover:bg-accent/90 transition-colors text-sm whitespace-nowrap">
             Upgrade — $29/mo
           </button>
         </div>
       </div>
+
+      {/* Pro upgrade modal */}
+      {showProModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowProModal(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider bg-accent text-primary px-2 py-0.5 rounded">Pro</span>
+              <h3 className="text-xl font-bold text-primary">BarberBook Pro</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Pro will unlock these features for $29/mo:</p>
+            <ul className="space-y-2 text-sm text-gray-700 mb-5">
+              <li>✓ Featured placement in search results</li>
+              <li>✓ Automated SMS reminders to customers</li>
+              <li>✓ Detailed booking & revenue analytics</li>
+              <li>✓ Late cancellation auto-charging</li>
+              <li>✓ Priority support</li>
+            </ul>
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-lg mb-4">
+              ⚠ Payments not yet enabled — Pro is launching soon. We'll email you when it's live.
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowProModal(false)} className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">
+                Close
+              </button>
+              <button onClick={() => { alert('Got it — we\'ll let you know!'); setShowProModal(false) }} className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-white hover:bg-primary/90 font-semibold text-sm">
+                Notify me when it launches
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -68,9 +106,10 @@ export default function BarberDashboard() {
       </div>
 
       {/* Quick links */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {[
-          { to: '/barber/shop', icon: '🏪', label: 'Edit Shop', desc: 'Profile, hours, photos' },
+          { to: '/barber/shop', icon: '🏪', label: 'Edit Shop', desc: 'Profile, hours, photos, location' },
+          { to: '/barber/staff', icon: '💈', label: 'Team', desc: 'Manage barbers & profiles' },
           { to: '/barber/services', icon: '✂', label: 'Services', desc: 'Manage your menu' },
           { to: '/barber/offers', icon: '🏷', label: 'Offers', desc: 'Promotions & discounts' },
           { to: '/barber/appointments', icon: '📅', label: 'Appointments', desc: 'View & manage bookings' },
@@ -85,7 +124,7 @@ export default function BarberDashboard() {
 
       {/* Upcoming appointments */}
       {upcoming.length > 0 && (
-        <div>
+        <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900">Upcoming Appointments</h2>
             <Link to="/barber/appointments" className="text-sm text-primary hover:underline">View all →</Link>
@@ -109,6 +148,41 @@ export default function BarberDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Recent reviews */}
+      {reviews.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Recent Reviews</h2>
+            <Link to={`/shops/${shop.id}?tab=reviews`} className="text-sm text-primary hover:underline">View all →</Link>
+          </div>
+          <div className="space-y-2">
+            {reviews.map((review) => (
+              <div key={review.id} className="card p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                      {review.customer?.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-medium text-sm">{review.customer?.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StarRating rating={review.rating} size="sm" />
+                    <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                {review.comment && <p className="text-gray-600 text-sm leading-relaxed mt-1">{review.comment}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {reviews.length === 0 && (
+        <div className="text-center py-10 text-gray-400 text-sm border-t pt-8">
+          <p className="text-3xl mb-2">⭐</p>
+          <p>No reviews yet — they'll appear here once customers visit and review you.</p>
         </div>
       )}
     </div>
