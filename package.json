@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
-    "build": "npm --prefix server install && npm --prefix client install && npm --prefix client run build && npm --prefix server run db:generate && npm --prefix server run build",
+    "build": "npm --prefix server install --include=dev && npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server run db:generate && npm --prefix server run build",
     "start": "npm --prefix server run migrate:deploy && npm --prefix server run seed:if-empty && node server/dist/index.js",
     "setup": "npm install && npm --prefix server install && npm --prefix client install",
     "db:setup": "npm --prefix server run db:migrate && npm --prefix server run db:generate",
