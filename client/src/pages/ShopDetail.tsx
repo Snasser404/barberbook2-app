@@ -87,9 +87,12 @@ export default function ShopDetail() {
         </div>
         <div className="flex-1">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {shop.logo && <img src={shop.logo} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />}
               <h1 className="text-3xl font-bold text-primary">{shop.name}</h1>
+              {shop.verificationStatus === 'VERIFIED' && (
+                <span className="badge bg-green-100 text-green-800 text-xs" title="Documents reviewed by BarberBook admin">✓ Verified</span>
+              )}
             </div>
             {user?.role === 'CUSTOMER' && (
               <button onClick={toggleFavorite} className={`text-2xl transition-transform hover:scale-110 ${isFavorite ? 'text-red-500' : 'text-gray-300'}`}>

@@ -58,13 +58,31 @@ model BarberShop {
   longitude   Float?
   createdAt   DateTime @default(now())
 
-  images       ShopImage[]
-  services     Service[]
-  offers       Offer[]
-  appointments Appointment[]
-  reviews      Review[]
-  favorites    Favorite[]
-  staff        Staff[]
+  // Verification — new shops start PENDING and are hidden from public list
+  // until an admin reviews their uploaded documents.
+  verificationStatus String    @default("PENDING") // PENDING, VERIFIED, REJECTED
+  verificationNotes  String?
+  verifiedAt         DateTime?
+  verifiedBy         String?   // admin userId
+
+  images           ShopImage[]
+  services         Service[]
+  offers           Offer[]
+  appointments     Appointment[]
+  reviews          Review[]
+  favorites        Favorite[]
+  staff            Staff[]
+  verificationDocs ShopVerificationDocument[]
+}
+
+model ShopVerificationDocument {
+  id           String     @id @default(cuid())
+  shopId       String
+  shop         BarberShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  url          String
+  documentType String     @default("OTHER") // BUSINESS_LICENSE, ID, UTILITY_BILL, OTHER
+  caption      String?
+  createdAt    DateTime   @default(now())
 }
 
 model Staff {

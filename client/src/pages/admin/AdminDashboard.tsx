@@ -5,6 +5,7 @@ import { User } from '../../types'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import PasswordField, { isPasswordValid } from '../../components/PasswordField'
 import { useAuth } from '../../context/AuthContext'
+import AdminVerifications from '../../components/AdminVerifications'
 
 type UserStatus = 'active' | 'deleted' | 'all'
 type AdminUser = User & { createdAt: string; deletedAt?: string | null }
@@ -211,6 +212,9 @@ export default function AdminDashboard() {
           <Stat label="Cancelled" value={stats.cancelledAppointments} />
         </div>
       )}
+
+      {/* Shop verifications (pending review takes priority over user moderation) */}
+      <AdminVerifications />
 
       {/* Users table */}
       <div className="card p-5 mb-8">

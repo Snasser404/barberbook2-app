@@ -13,6 +13,7 @@ import staffRouter from './routes/staff'
 import staffExtrasRouter from './routes/staff-extras'
 import photosRouter from './routes/photos'
 import adminRouter from './routes/admin'
+import verificationRouter from './routes/verification'
 import { ensureAdmin } from './lib/seed-admin'
 
 const app = express()
@@ -34,6 +35,7 @@ app.use('/api', staffRouter)
 app.use('/api', staffExtrasRouter)
 app.use('/api/photos', photosRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api', verificationRouter)
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '../../client/dist')

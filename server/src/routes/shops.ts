@@ -11,6 +11,9 @@ router.get('/', async (req, res) => {
   const { search, minRating } = req.query
   const shops = await prisma.barberShop.findMany({
     where: {
+      // Only show verified shops to the public — unverified ones stay hidden
+      // until an admin approves them.
+      verificationStatus: 'VERIFIED',
       ...(search ? { OR: [{ name: { contains: String(search) } }, { address: { contains: String(search) } }] } : {}),
       ...(minRating ? { rating: { gte: Number(minRating) } } : {}),
     },

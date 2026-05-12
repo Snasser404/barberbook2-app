@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { BarberShop, ShopImage } from '../../types'
 import AvatarUploader from '../../components/AvatarUploader'
 import LocationPicker from '../../components/LocationPicker'
+import ShopVerificationPanel from '../../components/ShopVerificationPanel'
 
 export default function ManageShop() {
   const navigate = useNavigate()
@@ -157,6 +158,13 @@ export default function ManageShop() {
           {saving ? 'Saving...' : shop ? 'Save changes' : 'Create shop'}
         </button>
       </form>
+
+      {/* Verification */}
+      {shop && (
+        <div className="mb-8">
+          <ShopVerificationPanel shop={shop} />
+        </div>
+      )}
 
       {/* Photo management */}
       {shop && (

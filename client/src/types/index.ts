@@ -11,6 +11,17 @@ export interface User {
   emailVerified?: boolean
 }
 
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED'
+
+export interface VerificationDoc {
+  id: string
+  shopId: string
+  url: string
+  documentType: 'BUSINESS_LICENSE' | 'ID' | 'UTILITY_BILL' | 'OTHER'
+  caption?: string | null
+  createdAt: string
+}
+
 export interface BarberShop {
   id: string
   ownerId: string
@@ -26,12 +37,16 @@ export interface BarberShop {
   reviewCount: number
   latitude?: number | null
   longitude?: number | null
+  verificationStatus?: VerificationStatus
+  verificationNotes?: string | null
+  verifiedAt?: string | null
   createdAt: string
   services?: Service[]
   images?: ShopImage[]
   offers?: Offer[]
   reviews?: Review[]
-  owner?: { id: string; name: string; phone?: string }
+  owner?: { id: string; name: string; phone?: string; email?: string }
+  verificationDocs?: VerificationDoc[]
 }
 
 export interface ShopImage {
