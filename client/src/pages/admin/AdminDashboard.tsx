@@ -178,7 +178,7 @@ export default function AdminDashboard() {
       <ConfirmDialog
         open={!!toDelete}
         title="Delete this user?"
-        message={toDelete ? `Deleting ${toDelete.name} (${toDelete.email}) is permanent. They will not be able to recover the account.` : undefined}
+        message={toDelete ? `Deleting ${toDelete.name} (${toDelete.email}) will permanently remove:\n\n• Their appointments, reviews, photos and favorites\n${toDelete.role === 'BARBER' ? '• Their entire shop including services, offers, staff, and all shop reviews\n' : ''}${toDelete.role === 'STAFF' ? '• Their staff profile, portfolio, and all reviews about them\n' : ''}\nThis cannot be undone.` : undefined}
         confirmLabel="Delete user"
         tone="danger"
         loading={deleting}

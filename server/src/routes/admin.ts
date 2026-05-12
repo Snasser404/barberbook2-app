@@ -53,19 +53,60 @@ router.get('/shops', authenticate, requireAdmin, async (_req, res) => {
   res.json(shops)
 })
 
-// Disable/suspend a user (sets to inactive — we'll mark by changing role temporarily;
-// for now we just expose deletion as a hard action)
+// Hard delete a user and ALL their related data.
+// Customers: deletes their appointments, reviews, photos, favorites, staff favorites, staff reviews
+// Shop owners: also deletes the shop (cascade handles services/offers/staff/images),
+//              plus appointments and reviews at the shop, and favorites of the shop
+// Staff: also deletes their staff profile (cascade handles portfolio/favorites/reviews),
+//        plus appointments assigned to them
 router.delete('/users/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
-  // Don't allow admin to delete themselves
   if (req.params.id === req.userId) {
     res.status(400).json({ error: 'You cannot delete your own admin account' })
     return
   }
+  const userId = req.params.id
+
   try {
-    await prisma.user.delete({ where: { id: req.params.id } })
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+    await prisma.$transaction(async (tx) => {
+      // ── 1. Customer-side dependent data (any role can theoretically have these) ──
+      await tx.staffReview.deleteMany({ where: { customerId: userId } })
+      await tx.review.deleteMany({ where: { customerId: userId } })
+      await tx.favorite.deleteMany({ where: { customerId: userId } })
+      await tx.staffFavorite.deleteMany({ where: { customerId: userId } })
+      await tx.customerPhoto.deleteMany({ where: { customerId: userId } })
+      await tx.appointment.deleteMany({ where: { customerId: userId } })
+
+      // ── 2. If owner: delete the shop (handles services/offers/staff/images via cascade) ──
+      const shop = await tx.barberShop.findUnique({ where: { ownerId: userId } })
+      if (shop) {
+        // Appointments + reviews + favorites pointing at this shop don't auto-cascade
+        await tx.appointment.deleteMany({ where: { shopId: shop.id } })
+        await tx.review.deleteMany({ where: { shopId: shop.id } })
+        await tx.favorite.deleteMany({ where: { shopId: shop.id } })
+        // Cascade chain takes care of: services -> offers (via SetNull on offer.serviceId),
+        // staff -> portfolio + staff favorites + staff reviews (cascade), images
+        await tx.barberShop.delete({ where: { id: shop.id } })
+      }
+
+      // ── 3. If they have a staff profile, delete it (and its appts) ──
+      const staff = await tx.staff.findUnique({ where: { userId } })
+      if (staff) {
+        await tx.appointment.deleteMany({ where: { staffId: staff.id } })
+        // Cascade handles: portfolio photos, staff favorites, staff reviews
+        await tx.staff.delete({ where: { id: staff.id } })
+      }
+
+      // ── 4. Finally delete the user ──
+      await tx.user.delete({ where: { id: userId } })
+    }, { timeout: 15000 })
+
     res.json({ success: true })
-  } catch {
-    res.status(400).json({ error: 'Could not delete user (may have related data). Contact engineering.' })
+  } catch (err) {
+    console.error('[admin delete user]', err)
+    res.status(500).json({ error: 'Could not delete user — see server logs for details' })
   }
 })
 

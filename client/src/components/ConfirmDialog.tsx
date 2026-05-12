@@ -27,7 +27,7 @@ export default function ConfirmDialog({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !loading && onCancel()}>
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-xl font-bold text-primary mb-2">{title}</h3>
-        {message && <p className="text-sm text-gray-600 mb-5">{message}</p>}
+        {message && <p className="text-sm text-gray-600 mb-5 whitespace-pre-line">{message}</p>}
         <div className="flex gap-2">
           <button
             onClick={onCancel}
