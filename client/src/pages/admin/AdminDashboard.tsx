@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import { User } from '../../types'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import PasswordField, { isPasswordValid } from '../../components/PasswordField'
+import { useAuth } from '../../context/AuthContext'
 
 type UserStatus = 'active' | 'deleted' | 'all'
 type AdminUser = User & { createdAt: string; deletedAt?: string | null }
@@ -25,6 +27,7 @@ interface Activity {
 }
 
 export default function AdminDashboard() {
+  const { user: me } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [activity, setActivity] = useState<Activity | null>(null)
@@ -35,7 +38,16 @@ export default function AdminDashboard() {
   const [toSuspend, setToSuspend] = useState<AdminUser | null>(null)
   const [toRestore, setToRestore] = useState<AdminUser | null>(null)
   const [toPermDelete, setToPermDelete] = useState<AdminUser | null>(null)
+  const [toDemote, setToDemote] = useState<AdminUser | null>(null)
+  const [toPromote, setToPromote] = useState<AdminUser | null>(null)
   const [working, setWorking] = useState(false)
+
+  // "+ Add admin" modal
+  const [showAddAdmin, setShowAddAdmin] = useState(false)
+  const [addAdminForm, setAddAdminForm] = useState({ email: '', name: '', password: '' })
+  const [addAdminLoading, setAddAdminLoading] = useState(false)
+  const [addAdminError, setAddAdminError] = useState('')
+  const [addAdminInfo, setAddAdminInfo] = useState('')
 
   const loadUsers = (s?: string, r?: string, st?: UserStatus) => {
     const roleParam = (r ?? roleFilter)
@@ -106,6 +118,75 @@ export default function AdminDashboard() {
     }
   }
 
+  const promoteNow = async () => {
+    if (!toPromote) return
+    setWorking(true)
+    try {
+      await api.post('/admin/admins', { email: toPromote.email })
+      setUsers((prev) => prev.map((u) => u.id === toPromote.id ? { ...u, role: 'ADMIN' } : u))
+      setToPromote(null)
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Could not promote user')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const demoteNow = async () => {
+    if (!toDemote) return
+    setWorking(true)
+    try {
+      await api.post(`/admin/users/${toDemote.id}/demote`)
+      setUsers((prev) => prev.map((u) => u.id === toDemote.id ? { ...u, role: 'CUSTOMER' } : u))
+      setToDemote(null)
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Could not demote user')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const submitAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAddAdminError('')
+    setAddAdminInfo('')
+
+    if (!addAdminForm.email) { setAddAdminError('Email is required'); return }
+
+    // If we're creating a new user (we'll detect server-side), password must be valid
+    if (addAdminForm.password && !isPasswordValid(addAdminForm.password)) {
+      setAddAdminError('Password does not meet the requirements')
+      return
+    }
+
+    setAddAdminLoading(true)
+    try {
+      const payload: any = { email: addAdminForm.email }
+      if (addAdminForm.password) payload.password = addAdminForm.password
+      if (addAdminForm.name) payload.name = addAdminForm.name
+
+      const { data } = await api.post('/admin/admins', payload)
+      setAddAdminInfo(data.created
+        ? `Created new admin: ${data.user.email}`
+        : `Promoted existing user to admin: ${data.user.email}`)
+      // Reload users list to reflect the change
+      loadUsers()
+      setAddAdminForm({ email: '', name: '', password: '' })
+      // Auto-close after a short delay so they see the success msg
+      setTimeout(() => { setShowAddAdmin(false); setAddAdminInfo('') }, 1800)
+    } catch (err: any) {
+      const msg = err.response?.data?.error || 'Could not add admin'
+      // If server says password required, hint at that
+      if (typeof msg === 'string' && msg.toLowerCase().includes('password is required')) {
+        setAddAdminError(`${msg} — that email isn't registered yet, so enter a name + password to create the admin account.`)
+      } else {
+        setAddAdminError(typeof msg === 'string' ? msg : 'Could not add admin')
+      }
+    } finally {
+      setAddAdminLoading(false)
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
 
   return (
@@ -133,7 +214,10 @@ export default function AdminDashboard() {
 
       {/* Users table */}
       <div className="card p-5 mb-8">
-        <h2 className="font-semibold text-gray-900 mb-3">Users</h2>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 className="font-semibold text-gray-900">Users</h2>
+          <button onClick={() => { setShowAddAdmin(true); setAddAdminError(''); setAddAdminInfo('') }} className="btn-primary text-sm">+ Add admin</button>
+        </div>
 
         {/* Status tabs */}
         <div className="flex gap-2 mb-3 flex-wrap">
@@ -198,7 +282,18 @@ export default function AdminDashboard() {
                             <button onClick={() => setToPermDelete(u)} className="text-xs text-red-700 hover:underline">Delete forever</button>
                           </>
                         ) : (
-                          <button onClick={() => setToSuspend(u)} className="text-xs text-amber-600 hover:underline">Suspend</button>
+                          <>
+                            {u.role === 'ADMIN' ? (
+                              u.id === me?.id ? (
+                                <span className="text-xs text-gray-400">You</span>
+                              ) : (
+                                <button onClick={() => setToDemote(u)} className="text-xs text-gray-500 hover:underline">Remove admin</button>
+                              )
+                            ) : (
+                              <button onClick={() => setToPromote(u)} className="text-xs text-purple-600 hover:underline">Make admin</button>
+                            )}
+                            {u.id !== me?.id && <button onClick={() => setToSuspend(u)} className="text-xs text-amber-600 hover:underline">Suspend</button>}
+                          </>
                         )}
                       </div>
                     </td>
@@ -288,6 +383,62 @@ export default function AdminDashboard() {
         onConfirm={permDeleteNow}
         onCancel={() => setToPermDelete(null)}
       />
+
+      {/* Promote to admin */}
+      <ConfirmDialog
+        open={!!toPromote}
+        title="Make this user an admin?"
+        message={toPromote ? `${toPromote.name} (${toPromote.email}) will gain full admin access — they will be able to manage all users, shops, and platform data.\n\nYou can revoke admin access at any time.` : undefined}
+        confirmLabel="Yes, make admin"
+        tone="primary"
+        loading={working}
+        onConfirm={promoteNow}
+        onCancel={() => setToPromote(null)}
+      />
+
+      {/* Demote admin */}
+      <ConfirmDialog
+        open={!!toDemote}
+        title="Remove admin access?"
+        message={toDemote ? `${toDemote.name} (${toDemote.email}) will lose admin privileges and be moved to a regular Customer account.\n\nTheir other data is unchanged.` : undefined}
+        confirmLabel="Remove admin"
+        tone="danger"
+        loading={working}
+        onConfirm={demoteNow}
+        onCancel={() => setToDemote(null)}
+      />
+
+      {/* Add admin modal */}
+      {showAddAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !addAdminLoading && setShowAddAdmin(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-primary mb-2">Add an admin</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter the email of someone you want to make an admin.
+              If they already have an account, they'll be promoted.
+              If not, fill in a name + password to create them as an admin.
+            </p>
+            {addAdminError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-3">{addAdminError}</div>}
+            {addAdminInfo && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm mb-3">{addAdminInfo}</div>}
+            <form onSubmit={submitAddAdmin} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input type="email" className="input" value={addAdminForm.email} onChange={(e) => setAddAdminForm({ ...addAdminForm, email: e.target.value })} placeholder="admin@example.com" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name (if creating new)</label>
+                <input className="input" value={addAdminForm.name} onChange={(e) => setAddAdminForm({ ...addAdminForm, name: e.target.value })} placeholder="Full name" />
+                <p className="text-xs text-gray-400 mt-1">Leave blank when promoting an existing user</p>
+              </div>
+              <PasswordField label="Password (if creating new)" value={addAdminForm.password} onChange={(v) => setAddAdminForm({ ...addAdminForm, password: v })} required={false} />
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setShowAddAdmin(false)} disabled={addAdminLoading} className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancel</button>
+                <button type="submit" disabled={addAdminLoading} className="flex-1 btn-primary text-sm">{addAdminLoading ? 'Working…' : 'Add admin'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

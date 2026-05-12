@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth'
+import { validatePassword } from '../lib/password'
 
 const router = Router()
 
@@ -88,6 +90,76 @@ router.post('/users/:id/restore', authenticate, requireAdmin, async (req: AuthRe
     where: { id: req.params.id },
     data: { deletedAt: null },
   })
+  res.json({ success: true })
+})
+
+// Add a new admin OR promote an existing user.
+// Body: { email, password?, name? }
+//   - If user exists with that email → promotes them to ADMIN (password ignored)
+//   - If user doesn't exist → creates a new user with role=ADMIN
+//     (password + name required in that case)
+router.post('/admins', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const rawEmail = String(req.body.email || '').toLowerCase().trim()
+  if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+    res.status(400).json({ error: 'A valid email is required' })
+    return
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email: rawEmail } })
+  if (existing) {
+    if (existing.deletedAt) {
+      res.status(400).json({ error: 'This account is suspended. Restore it first, then promote.' })
+      return
+    }
+    if (existing.role === 'ADMIN') {
+      res.status(400).json({ error: 'This user is already an admin' })
+      return
+    }
+    const updated = await prisma.user.update({
+      where: { id: existing.id },
+      data: { role: 'ADMIN' },
+      select: { id: true, email: true, name: true, role: true, createdAt: true, deletedAt: true },
+    })
+    res.json({ user: updated, created: false })
+    return
+  }
+
+  // Creating a brand new admin user requires password + name
+  const { password, name } = req.body
+  if (!password) { res.status(400).json({ error: 'Password is required to create a new admin' }); return }
+  if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    res.status(400).json({ error: 'Name is required to create a new admin' })
+    return
+  }
+  const pw = validatePassword(password)
+  if (!pw.ok) { res.status(400).json({ error: pw.error }); return }
+
+  const hashed = await bcrypt.hash(password, 10)
+  const user = await prisma.user.create({
+    data: { email: rawEmail, password: hashed, name: name.trim(), role: 'ADMIN', emailVerified: true },
+    select: { id: true, email: true, name: true, role: true, createdAt: true, deletedAt: true },
+  })
+  res.status(201).json({ user, created: true })
+})
+
+// Demote an admin back to CUSTOMER. Can't demote yourself.
+router.post('/users/:id/demote', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  if (req.params.id === req.userId) {
+    res.status(400).json({ error: 'You cannot remove your own admin role' })
+    return
+  }
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+  if (user.role !== 'ADMIN') { res.status(400).json({ error: 'User is not an admin' }); return }
+
+  // Make sure we never end up with zero admins
+  const adminCount = await prisma.user.count({ where: { role: 'ADMIN', deletedAt: null } })
+  if (adminCount <= 1) {
+    res.status(400).json({ error: 'Cannot demote the only remaining admin' })
+    return
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { role: 'CUSTOMER' } })
   res.json({ success: true })
 })
 
