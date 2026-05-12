@@ -17,6 +17,15 @@ model User {
   avatar    String?
   createdAt DateTime @default(now())
 
+  // Email verification
+  emailVerified            Boolean   @default(false)
+  emailVerificationCode    String?
+  emailVerificationExpires DateTime?
+
+  // Password reset
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+
   shop            BarberShop?
   staffProfile    Staff?
   appointments    Appointment[]

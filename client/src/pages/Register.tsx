@@ -23,7 +23,8 @@ export default function Register() {
     setLoading(true)
     try {
       const user = await register(form)
-      navigate(user.role === 'BARBER' ? '/barber/shop' : '/')
+      // Send everyone through email verification first; they can skip if needed
+      navigate('/verify-email', { state: { next: user.role === 'BARBER' ? '/barber/shop' : '/' } })
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed')
     } finally {

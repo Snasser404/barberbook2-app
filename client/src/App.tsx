@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
+import VerifyEmailBanner from './components/VerifyEmailBanner'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -11,6 +12,9 @@ import CustomerProfile from './pages/CustomerProfile'
 import Favorites from './pages/Favorites'
 import StaffProfile from './pages/StaffProfile'
 import MyPhotos from './pages/MyPhotos'
+import VerifyEmail from './pages/VerifyEmail'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import BarberDashboard from './pages/barber/BarberDashboard'
 import ManageShop from './pages/barber/ManageShop'
 import ManageServices from './pages/barber/ManageServices'
@@ -32,11 +36,15 @@ function AppRoutes() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <VerifyEmailBanner />
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<ProtectedRoute><VerifyEmail /></ProtectedRoute>} />
           <Route path="/shops/:id" element={<ShopDetail />} />
           <Route path="/staff/:id" element={<StaffProfile />} />
           <Route path="/shops/:id/book" element={<ProtectedRoute role="CUSTOMER"><BookAppointment /></ProtectedRoute>} />
