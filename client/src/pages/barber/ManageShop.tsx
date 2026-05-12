@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../../api/client'
 import { BarberShop, ShopImage } from '../../types'
 import AvatarUploader from '../../components/AvatarUploader'
+import LocationPicker from '../../components/LocationPicker'
 
 export default function ManageShop() {
   const navigate = useNavigate()
@@ -12,7 +13,6 @@ export default function ManageShop() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [locating, setLocating] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -25,25 +25,6 @@ export default function ManageShop() {
     }).catch(() => {})
   }, [])
 
-  const useMyLocation = () => {
-    if (!('geolocation' in navigator)) {
-      setError('Geolocation not supported by your browser')
-      return
-    }
-    setLocating(true)
-    setError('')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((f) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
-        setLocating(false)
-      },
-      () => {
-        setError('Could not get your location. Make sure location access is allowed.')
-        setLocating(false)
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -162,28 +143,14 @@ export default function ManageShop() {
 
         {/* Location */}
         <div className="border-t pt-4">
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-gray-700">Shop location 📍</label>
-            <button type="button" onClick={useMyLocation} disabled={locating} className="text-xs font-medium text-primary hover:underline disabled:opacity-50">
-              {locating ? 'Locating...' : '📍 Use my current location'}
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mb-2">Customers will see your shop on a map and how far they are from you. Stand inside your shop for the most accurate pin.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="number" step="any" placeholder="Latitude" className="input text-sm"
-              value={form.latitude ?? ''}
-              onChange={(e) => setForm({ ...form, latitude: e.target.value === '' ? null : Number(e.target.value) })}
-            />
-            <input
-              type="number" step="any" placeholder="Longitude" className="input text-sm"
-              value={form.longitude ?? ''}
-              onChange={(e) => setForm({ ...form, longitude: e.target.value === '' ? null : Number(e.target.value) })}
-            />
-          </div>
-          {form.latitude != null && form.longitude != null && (
-            <p className="text-xs text-green-600 mt-1">✓ Pinned at {form.latitude.toFixed(4)}, {form.longitude.toFixed(4)}</p>
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Shop location 📍</label>
+          <p className="text-xs text-gray-500 mb-3">Search for your shop, click on the map, or use your current location. The address field above updates automatically to match the pin.</p>
+          <LocationPicker
+            initialLat={form.latitude}
+            initialLng={form.longitude}
+            initialAddress={form.address}
+            onChange={(loc) => setForm((f) => ({ ...f, latitude: loc.lat, longitude: loc.lng, address: loc.address || f.address }))}
+          />
         </div>
 
         <button type="submit" disabled={saving} className="btn-primary w-full">
