@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
     include: {
       services: { where: { isActive: true } },
       images: true,
-      offers: { where: { isActive: true } },
+      offers: { where: { isActive: true }, include: { service: { select: { id: true, name: true } } } },
       _count: { select: { reviews: true } },
     },
     orderBy: { rating: 'desc' },
@@ -39,7 +39,7 @@ router.get('/:id', async (req, res) => {
     include: {
       services: { where: { isActive: true } },
       images: true,
-      offers: { where: { isActive: true } },
+      offers: { where: { isActive: true }, include: { service: { select: { id: true, name: true } } } },
       reviews: {
         include: { customer: { select: { id: true, name: true, avatar: true } } },
         orderBy: { createdAt: 'desc' },
@@ -51,12 +51,25 @@ router.get('/:id', async (req, res) => {
   res.json(shop)
 })
 
+function validateHours(open?: string, close?: string): string | null {
+  if (!open || !close) return null
+  if (open === close) return 'Opening and closing times cannot be the same'
+  const [oh, om] = open.split(':').map(Number)
+  const [ch, cm] = close.split(':').map(Number)
+  if (Number.isNaN(oh) || Number.isNaN(ch)) return 'Invalid time format'
+  if (oh * 60 + om >= ch * 60 + cm) return 'Closing time must be after opening time'
+  return null
+}
+
 router.post('/', authenticate, requireBarber, async (req: AuthRequest, res) => {
   const existing = await prisma.barberShop.findUnique({ where: { ownerId: req.userId } })
   if (existing) { res.status(400).json({ error: 'You already have a shop' }); return }
 
   const { name, address, description, phone, openingTime, closingTime, latitude, longitude } = req.body
   if (!name || !address) { res.status(400).json({ error: 'Name and address are required' }); return }
+
+  const hoursError = validateHours(openingTime, closingTime)
+  if (hoursError) { res.status(400).json({ error: hoursError }); return }
 
   const shop = await prisma.barberShop.create({
     data: {
@@ -74,6 +87,12 @@ router.put('/:id', authenticate, requireBarber, async (req: AuthRequest, res) =>
   if (!shop || shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const { name, address, description, phone, openingTime, closingTime, latitude, longitude, logo } = req.body
+
+  if (openingTime !== undefined && closingTime !== undefined) {
+    const hoursError = validateHours(openingTime, closingTime)
+    if (hoursError) { res.status(400).json({ error: hoursError }); return }
+  }
+
   const updated = await prisma.barberShop.update({
     where: { id: req.params.id },
     data: {
@@ -178,6 +197,7 @@ router.delete('/:shopId/services/:id', authenticate, requireBarber, async (req: 
 router.get('/:shopId/offers', async (req, res) => {
   const offers = await prisma.offer.findMany({
     where: { shopId: req.params.shopId, isActive: true },
+    include: { service: { select: { id: true, name: true, price: true } } },
     orderBy: { createdAt: 'desc' },
   })
   res.json(offers)
@@ -195,8 +215,17 @@ router.post('/:shopId/offers', authenticate, requireBarber, async (req: AuthRequ
   const shop = await prisma.barberShop.findUnique({ where: { id: req.params.shopId } })
   if (!shop || shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { title, description, discountPercent, validUntil } = req.body
+  const { title, description, discountPercent, validUntil, serviceId } = req.body
   if (!title || discountPercent === undefined) { res.status(400).json({ error: 'Title and discount are required' }); return }
+
+  // If a serviceId is provided, ensure it belongs to this shop
+  if (serviceId) {
+    const svc = await prisma.service.findUnique({ where: { id: serviceId } })
+    if (!svc || svc.shopId !== req.params.shopId) {
+      res.status(400).json({ error: 'Service not part of this shop' })
+      return
+    }
+  }
 
   const offer = await prisma.offer.create({
     data: {
@@ -205,6 +234,7 @@ router.post('/:shopId/offers', authenticate, requireBarber, async (req: AuthRequ
       description,
       discountPercent: Number(discountPercent),
       validUntil: validUntil ? new Date(validUntil) : null,
+      serviceId: serviceId || null,
     },
   })
   res.status(201).json(offer)
@@ -214,7 +244,16 @@ router.put('/:shopId/offers/:id', authenticate, requireBarber, async (req: AuthR
   const shop = await prisma.barberShop.findUnique({ where: { id: req.params.shopId } })
   if (!shop || shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { title, description, discountPercent, validUntil, isActive } = req.body
+  const { title, description, discountPercent, validUntil, isActive, serviceId } = req.body
+
+  if (serviceId !== undefined && serviceId !== null) {
+    const svc = await prisma.service.findUnique({ where: { id: serviceId } })
+    if (!svc || svc.shopId !== req.params.shopId) {
+      res.status(400).json({ error: 'Service not part of this shop' })
+      return
+    }
+  }
+
   const offer = await prisma.offer.update({
     where: { id: req.params.id },
     data: {
@@ -223,6 +262,7 @@ router.put('/:shopId/offers/:id', authenticate, requireBarber, async (req: AuthR
       discountPercent: discountPercent !== undefined ? Number(discountPercent) : undefined,
       validUntil: validUntil ? new Date(validUntil) : undefined,
       isActive,
+      serviceId: serviceId === undefined ? undefined : serviceId,
     },
   })
   res.json(offer)

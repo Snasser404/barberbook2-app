@@ -5,6 +5,7 @@ import { Staff, Appointment, AppointmentStatus } from '../../types'
 import StarRating from '../../components/StarRating'
 import AppointmentPhotos from '../../components/AppointmentPhotos'
 import AvatarUploader from '../../components/AvatarUploader'
+import StaffPortfolio from '../../components/StaffPortfolio'
 
 const statusColors: Record<AppointmentStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
@@ -153,6 +154,11 @@ export default function StaffDashboard() {
             </div>
           </form>
         )}
+      </div>
+
+      {/* Portfolio (editable) */}
+      <div className="card p-5 mb-8">
+        <StaffPortfolio staffId={staff.id} editable />
       </div>
 
       {/* Upcoming appointments */}

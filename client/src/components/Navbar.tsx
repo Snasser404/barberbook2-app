@@ -21,23 +21,28 @@ export default function Navbar() {
 
   const links = !user
     ? null
-    : user.role === 'BARBER'
+    : user.role === 'ADMIN'
       ? [
-          { to: '/barber', label: 'Dashboard' },
-          { to: '/barber/appointments', label: 'Appointments' },
+          { to: '/admin', label: 'Admin' },
           { to: '/profile', label: user.name },
         ]
-      : user.role === 'STAFF'
+      : user.role === 'BARBER'
         ? [
-            { to: '/staff', label: 'Dashboard' },
+            { to: '/barber', label: 'Dashboard' },
+            { to: '/barber/appointments', label: 'Appointments' },
             { to: '/profile', label: user.name },
           ]
-        : [
-            { to: '/bookings', label: 'My Bookings' },
-            { to: '/my-photos', label: 'My Photos' },
-            { to: '/favorites', label: 'Favorites' },
-            { to: '/profile', label: user.name },
-          ]
+        : user.role === 'STAFF'
+          ? [
+              { to: '/staff', label: 'Dashboard' },
+              { to: '/profile', label: user.name },
+            ]
+          : [
+              { to: '/bookings', label: 'My Bookings' },
+              { to: '/my-photos', label: 'My Photos' },
+              { to: '/favorites', label: 'Favorites' },
+              { to: '/profile', label: user.name },
+            ]
 
   return (
     <nav className="bg-primary text-white shadow-lg relative">

@@ -50,6 +50,21 @@ export default function ManageShop() {
     setSaving(true)
     setError('')
     setSaved(false)
+
+    // Client-side guard against same-time / inverted hours
+    if (form.openingTime && form.closingTime) {
+      if (form.openingTime === form.closingTime) {
+        setError('Opening and closing times cannot be the same')
+        setSaving(false)
+        return
+      }
+      if (form.openingTime >= form.closingTime) {
+        setError('Closing time must be after opening time')
+        setSaving(false)
+        return
+      }
+    }
+
     try {
       if (shop) {
         const { data } = await api.put(`/shops/${shop.id}`, form)

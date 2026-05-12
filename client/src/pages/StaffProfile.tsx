@@ -4,6 +4,7 @@ import api from '../api/client'
 import { Staff, Appointment } from '../types'
 import StarRating from '../components/StarRating'
 import { useAuth } from '../context/AuthContext'
+import StaffPortfolio from '../components/StaffPortfolio'
 
 export default function StaffProfile() {
   const { id } = useParams<{ id: string }>()
@@ -16,6 +17,7 @@ export default function StaffProfile() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [hasCompletedAppt, setHasCompletedAppt] = useState(false)
+  const [isFavorite, setIsFavorite] = useState(false)
 
   useEffect(() => {
     api.get(`/staff/${id}`).then((r) => setStaff(r.data)).finally(() => setLoading(false))
@@ -24,8 +26,22 @@ export default function StaffProfile() {
         const completed = r.data.some((a: Appointment) => a.staffId === id && a.status === 'COMPLETED')
         setHasCompletedAppt(completed)
       })
+      api.get('/staff-favorites').then((r) => {
+        setIsFavorite(r.data.some((s: Staff) => s.id === id))
+      }).catch(() => {})
     }
   }, [id, user])
+
+  const toggleFavorite = async () => {
+    if (!user) { navigate('/login'); return }
+    if (isFavorite) {
+      await api.delete(`/staff/${id}/favorite`)
+      setIsFavorite(false)
+    } else {
+      await api.post(`/staff/${id}/favorite`)
+      setIsFavorite(true)
+    }
+  }
 
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,7 +87,19 @@ export default function StaffProfile() {
             </div>
           )}
           <div className="flex-1 text-center sm:text-left">
-            <h1 className="text-2xl font-bold text-primary">{staff.name}</h1>
+            <div className="flex items-center gap-2 justify-center sm:justify-start">
+              <h1 className="text-2xl font-bold text-primary">{staff.name}</h1>
+              {user?.role === 'CUSTOMER' && (
+                <button
+                  type="button"
+                  onClick={toggleFavorite}
+                  aria-label={isFavorite ? 'Unfavorite barber' : 'Favorite barber'}
+                  className={`text-2xl transition-transform hover:scale-110 ${isFavorite ? 'text-red-500' : 'text-gray-300'}`}
+                >
+                  {isFavorite ? '♥' : '♡'}
+                </button>
+              )}
+            </div>
             {staff.shop && (
               <p className="text-gray-500 text-sm mt-1">at <Link to={`/shops/${staff.shop.id}`} className="text-primary hover:underline">{staff.shop.name}</Link></p>
             )}
@@ -95,6 +123,11 @@ export default function StaffProfile() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Portfolio (public, read-only) */}
+      <div className="card p-5 mb-6">
+        <StaffPortfolio staffId={staff.id} />
       </div>
 
       {/* Reviews */}

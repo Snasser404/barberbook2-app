@@ -176,8 +176,12 @@ export default function MyPhotos() {
                 </label>
                 <select className="input" value={uploadForm.appointmentId} onChange={(e) => setUploadForm({ ...uploadForm, appointmentId: e.target.value })}>
                   <option value="">— No, just save to my library —</option>
+                  {/* INSPIRATION photos can only be attached to upcoming visits */}
+                  {/* HISTORY photos can only be attached to completed visits */}
                   {appointments
-                    .filter((a) => uploadForm.type === 'INSPIRATION' ? (a.status === 'PENDING' || a.status === 'CONFIRMED') : a.status === 'COMPLETED')
+                    .filter((a) => uploadForm.type === 'INSPIRATION'
+                      ? (a.status === 'PENDING' || a.status === 'CONFIRMED')
+                      : a.status === 'COMPLETED')
                     .map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.shop?.name} · {a.date} {a.time}{a.staff ? ` · ${a.staff.name}` : ''}
@@ -221,10 +225,15 @@ export default function MyPhotos() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Attached to</label>
                 <select className="input" value={editing.appointmentId || ''} onChange={(e) => setEditing({ ...editing, appointmentId: e.target.value || null })}>
                   <option value="">— Not attached —</option>
-                  {appointments.map((a) => (
-                    <option key={a.id} value={a.id}>{a.shop?.name} · {a.date} {a.time}{a.staff ? ` · ${a.staff.name}` : ''}</option>
-                  ))}
+                  {appointments
+                    .filter((a) => editing.type === 'INSPIRATION'
+                      ? (a.status === 'PENDING' || a.status === 'CONFIRMED')
+                      : a.status === 'COMPLETED')
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>{a.shop?.name} · {a.date} {a.time}{a.staff ? ` · ${a.staff.name}` : ''}</option>
+                    ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">Inspiration photos can only be attached to upcoming visits.</p>
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancel</button>

@@ -21,6 +21,7 @@ export default function Login() {
       // Role-aware redirect
       const target = from !== '/'
         ? from
+        : user.role === 'ADMIN' ? '/admin'
         : user.role === 'BARBER' ? '/barber'
         : user.role === 'STAFF' ? '/staff'
         : '/'

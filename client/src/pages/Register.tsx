@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PasswordField, { isPasswordValid } from '../components/PasswordField'
 
 export default function Register() {
   const { register } = useAuth()
@@ -13,10 +14,16 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!isPasswordValid(form.password)) {
+      setError('Please choose a stronger password that meets all the requirements')
+      return
+    }
+
     setLoading(true)
     try {
-      await register(form)
-      navigate(form.role === 'BARBER' ? '/barber/shop' : '/')
+      const user = await register(form)
+      navigate(user.role === 'BARBER' ? '/barber/shop' : '/')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed')
     } finally {
@@ -62,10 +69,7 @@ export default function Register() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
             <input type="tel" className="input" placeholder="+1 555 000 0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" className="input" placeholder="Min 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} />
-          </div>
+          <PasswordField value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
           <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
             {loading ? 'Creating account...' : 'Create account'}
           </button>

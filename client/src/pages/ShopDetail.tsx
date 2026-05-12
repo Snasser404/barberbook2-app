@@ -144,21 +144,43 @@ export default function ShopDetail() {
       {/* Services */}
       {activeTab === 'services' && (
         <div className="grid sm:grid-cols-2 gap-4">
-          {shop.services?.map((s) => (
-            <div key={s.id} className="card p-4 flex justify-between items-start">
-              <div>
-                <h3 className="font-semibold text-gray-900">{s.name}</h3>
-                {s.description && <p className="text-gray-500 text-sm mt-0.5">{s.description}</p>}
-                <p className="text-gray-400 text-xs mt-1">{s.duration} min</p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-bold text-primary">${s.price}</span>
-                {user?.role === 'CUSTOMER' && (
-                  <Link to={`/shops/${shop.id}/book?serviceId=${s.id}`} className="block text-xs text-accent hover:underline mt-1">Book this</Link>
+          {shop.services?.map((s) => {
+            // Offers that apply to this specific service
+            const linked = shop.offers?.filter((o) => o.serviceId === s.id) || []
+            const discount = linked.length > 0 ? Math.max(...linked.map((o) => o.discountPercent)) : 0
+            const discounted = discount ? Math.round(s.price * (100 - discount)) / 100 : null
+            return (
+              <div key={s.id} className="card p-4">
+                <div className="flex justify-between items-start gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{s.name}</h3>
+                    {s.description && <p className="text-gray-500 text-sm mt-0.5">{s.description}</p>}
+                    <p className="text-gray-400 text-xs mt-1">{s.duration} min</p>
+                  </div>
+                  <div className="text-right">
+                    {discounted !== null ? (
+                      <div>
+                        <span className="text-sm text-gray-400 line-through">${s.price}</span>
+                        <span className="text-lg font-bold text-primary ml-1">${discounted}</span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold text-primary">${s.price}</span>
+                    )}
+                    {user?.role === 'CUSTOMER' && (
+                      <Link to={`/shops/${shop.id}/book?serviceId=${s.id}`} className="block text-xs text-accent hover:underline mt-1">Book this</Link>
+                    )}
+                  </div>
+                </div>
+                {linked.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {linked.map((o) => (
+                      <span key={o.id} className="badge bg-accent/20 text-amber-800 text-xs">🏷 {o.title} — {o.discountPercent}% off</span>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            )
+          })}
           {!shop.services?.length && <p className="text-gray-400 col-span-2 text-center py-8">No services listed yet</p>}
         </div>
       )}

@@ -33,3 +33,8 @@ export function requireStaff(req: AuthRequest, res: Response, next: NextFunction
   if (req.userRole !== 'STAFF') { res.status(403).json({ error: 'Staff only' }); return }
   next()
 }
+
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (req.userRole !== 'ADMIN') { res.status(403).json({ error: 'Admin only' }); return }
+  next()
+}

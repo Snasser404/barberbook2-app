@@ -1,4 +1,4 @@
-export type Role = 'CUSTOMER' | 'BARBER' | 'STAFF'
+export type Role = 'CUSTOMER' | 'BARBER' | 'STAFF' | 'ADMIN'
 export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
 
 export interface User {
@@ -53,11 +53,21 @@ export interface Service {
 export interface Offer {
   id: string
   shopId: string
+  serviceId?: string | null
+  service?: { id: string; name: string; price?: number } | null
   title: string
   description?: string
   discountPercent: number
   validUntil?: string
   isActive: boolean
+  createdAt: string
+}
+
+export interface StaffPortfolioPhoto {
+  id: string
+  staffId: string
+  url: string
+  caption?: string | null
   createdAt: string
 }
 

@@ -67,17 +67,34 @@ router.post('/', authenticate, requireCustomer, async (req: AuthRequest, res) =>
   }
 
   const slotMin = parseInt(time.split(':')[0]) * 60 + parseInt(time.split(':')[1])
-  // If staff specified, only check their conflicts; otherwise check shop-wide
-  const conflicting = await prisma.appointment.findFirst({
+
+  // Prevent the customer from double-booking themselves at overlapping times
+  const customerConflict = await prisma.appointment.findFirst({
     where: {
-      shopId, date,
+      customerId: req.userId!, date,
       status: { in: ['PENDING', 'CONFIRMED'] },
-      ...(staffId ? { staffId } : {}),
     },
     include: { service: true },
   })
+  if (customerConflict) {
+    const apptMin = parseInt(customerConflict.time.split(':')[0]) * 60 + parseInt(customerConflict.time.split(':')[1])
+    if (slotMin < apptMin + customerConflict.service.duration && slotMin + service.duration > apptMin) {
+      res.status(409).json({ error: 'You already have an appointment that overlaps with this time' })
+      return
+    }
+  }
 
-  if (conflicting) {
+  // Find ALL conflicts (not just one) — if staff specified check only their schedule,
+  // otherwise treat the shop as a single chair (backwards-compatible).
+  const conflictingList = await prisma.appointment.findMany({
+    where: {
+      shopId, date,
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      ...(staffId ? { staffId } : { staffId: null }),
+    },
+    include: { service: true },
+  })
+  for (const conflicting of conflictingList) {
     const apptMin = parseInt(conflicting.time.split(':')[0]) * 60 + parseInt(conflicting.time.split(':')[1])
     if (slotMin < apptMin + conflicting.service.duration && slotMin + service.duration > apptMin) {
       res.status(409).json({ error: 'This time slot is no longer available' })

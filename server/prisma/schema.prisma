@@ -13,17 +13,18 @@ model User {
   password  String
   name      String
   phone     String?
-  role      String   @default("CUSTOMER")
+  role      String   @default("CUSTOMER") // CUSTOMER, BARBER, STAFF, ADMIN
   avatar    String?
   createdAt DateTime @default(now())
 
-  shop         BarberShop?
-  staffProfile Staff?
-  appointments Appointment[]
-  reviews      Review[]
-  favorites    Favorite[]
-  staffReviews StaffReview[]
-  photos       CustomerPhoto[]
+  shop            BarberShop?
+  staffProfile    Staff?
+  appointments    Appointment[]
+  reviews         Review[]
+  favorites       Favorite[]
+  staffReviews    StaffReview[]
+  photos          CustomerPhoto[]
+  staffFavorites  StaffFavorite[]
 }
 
 model BarberShop {
@@ -70,6 +71,27 @@ model Staff {
 
   appointments Appointment[]
   reviews      StaffReview[]
+  portfolio    StaffPortfolioPhoto[]
+  favoritedBy  StaffFavorite[]
+}
+
+model StaffPortfolioPhoto {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+}
+
+model StaffFavorite {
+  id         String  @id @default(cuid())
+  customerId String
+  customer   User    @relation(fields: [customerId], references: [id])
+  staffId    String
+  staff      Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, staffId])
 }
 
 model StaffReview {
@@ -105,12 +127,15 @@ model Service {
   isActive    Boolean    @default(true)
 
   appointments Appointment[]
+  offers       Offer[]
 }
 
 model Offer {
   id              String     @id @default(cuid())
   shopId          String
   shop            BarberShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  serviceId       String?
+  service         Service?   @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   title           String
   description     String?
   discountPercent Int

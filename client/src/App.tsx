@@ -18,6 +18,7 @@ import ManageOffers from './pages/barber/ManageOffers'
 import ManageAppointments from './pages/barber/ManageAppointments'
 import ManageStaff from './pages/barber/ManageStaff'
 import StaffDashboard from './pages/staff/StaffDashboard'
+import AdminDashboard from './pages/admin/AdminDashboard'
 
 function ProtectedRoute({ children, role }: { children: JSX.Element; role?: string }) {
   const { user, loading } = useAuth()
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="/barber/appointments" element={<ProtectedRoute role="BARBER"><ManageAppointments /></ProtectedRoute>} />
           <Route path="/barber/staff" element={<ProtectedRoute role="BARBER"><ManageStaff /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute role="STAFF"><StaffDashboard /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute role="ADMIN"><AdminDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

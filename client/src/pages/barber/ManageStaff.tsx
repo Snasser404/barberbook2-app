@@ -3,6 +3,7 @@ import api from '../../api/client'
 import { Staff, BarberShop } from '../../types'
 import StarRating from '../../components/StarRating'
 import AvatarUploader from '../../components/AvatarUploader'
+import PasswordField, { isPasswordValid } from '../../components/PasswordField'
 
 export default function ManageStaff() {
   const [shop, setShop] = useState<BarberShop | null>(null)
@@ -65,6 +66,11 @@ export default function ManageStaff() {
         if (form.createLogin) {
           if (!form.email || !form.password) {
             setError('Email and password required to create a login')
+            setSaving(false)
+            return
+          }
+          if (!isPasswordValid(form.password)) {
+            setError('Password does not meet the requirements (8+ chars, uppercase, lowercase, number)')
             setSaving(false)
             return
           }
@@ -199,11 +205,13 @@ export default function ManageStaff() {
                         <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
                         <input type="email" className="input text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="barber@example.com" required={form.createLogin} />
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Temporary password (min 6 chars)</label>
-                        <input type="text" className="input text-sm" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Share with the barber to sign in first time" required={form.createLogin} minLength={6} />
-                        <p className="text-xs text-gray-400 mt-1">Share this with them — they can change it after signing in.</p>
-                      </div>
+                      <PasswordField
+                        label="Temporary password"
+                        value={form.password}
+                        onChange={(v) => setForm({ ...form, password: v })}
+                        placeholder="Share with the barber to sign in first time"
+                      />
+                      <p className="text-xs text-gray-500 -mt-1">Share with them — they can change it after first sign-in.</p>
                     </div>
                   )}
                 </div>

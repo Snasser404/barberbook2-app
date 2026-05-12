@@ -33,11 +33,15 @@ router.post('/', authenticate, requireCustomer, upload.single('photo'), async (r
   if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return }
   const { caption, type, appointmentId } = req.body
 
-  // Validate appointment ownership if provided
+  // Validate appointment ownership + only allow sharing on upcoming visits
   if (appointmentId) {
     const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } })
     if (!appt || appt.customerId !== req.userId) {
       res.status(403).json({ error: 'Cannot attach to that appointment' })
+      return
+    }
+    if (type !== 'COMPLETED' && (appt.status === 'COMPLETED' || appt.status === 'CANCELLED')) {
+      res.status(400).json({ error: "Inspiration photos can only be shared on upcoming visits" })
       return
     }
   }
@@ -74,6 +78,11 @@ router.put('/:id', authenticate, requireCustomer, async (req: AuthRequest, res) 
     const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } })
     if (!appt || appt.customerId !== req.userId) {
       res.status(403).json({ error: 'Cannot attach to that appointment' })
+      return
+    }
+    const wantedType = type || photo.type
+    if (wantedType !== 'COMPLETED' && (appt.status === 'COMPLETED' || appt.status === 'CANCELLED')) {
+      res.status(400).json({ error: "Inspiration photos can only be shared on upcoming visits" })
       return
     }
   }

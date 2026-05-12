@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/client'
 import AvatarUploader from '../components/AvatarUploader'
+import PasswordField, { isPasswordValid } from '../components/PasswordField'
 
 export default function CustomerProfile() {
   const { user, updateUser } = useAuth()
@@ -9,6 +10,33 @@ export default function CustomerProfile() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+
+  // Password change state
+  const [pwForm, setPwForm] = useState({ current: '', next: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwError, setPwError] = useState('')
+
+  const changePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPwError('')
+    setPwMsg('')
+    if (!isPasswordValid(pwForm.next)) {
+      setPwError('New password does not meet the requirements')
+      return
+    }
+    setPwSaving(true)
+    try {
+      await api.post('/auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next })
+      setPwMsg('Password changed successfully')
+      setPwForm({ current: '', next: '' })
+      setTimeout(() => setPwMsg(''), 3000)
+    } catch (err: any) {
+      setPwError(err.response?.data?.error || 'Could not change password')
+    } finally {
+      setPwSaving(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,6 +103,23 @@ export default function CustomerProfile() {
           </div>
           <button type="submit" disabled={saving} className="btn-primary w-full">
             {saving ? 'Saving...' : 'Save changes'}
+          </button>
+        </form>
+      </div>
+
+      {/* Change password */}
+      <div className="card p-6 mt-6">
+        <h2 className="font-semibold text-gray-900 mb-4">Change password</h2>
+        {pwError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-3">{pwError}</div>}
+        {pwMsg && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm mb-3">{pwMsg}</div>}
+        <form onSubmit={changePassword} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
+            <input type="password" className="input" value={pwForm.current} onChange={(e) => setPwForm({ ...pwForm, current: e.target.value })} required />
+          </div>
+          <PasswordField label="New password" value={pwForm.next} onChange={(v) => setPwForm({ ...pwForm, next: v })} />
+          <button type="submit" disabled={pwSaving} className="btn-primary w-full">
+            {pwSaving ? 'Updating...' : 'Update password'}
           </button>
         </form>
       </div>

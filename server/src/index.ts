@@ -10,7 +10,10 @@ import appointmentsRouter from './routes/appointments'
 import favoritesRouter from './routes/favorites'
 import uploadsRouter from './routes/uploads'
 import staffRouter from './routes/staff'
+import staffExtrasRouter from './routes/staff-extras'
 import photosRouter from './routes/photos'
+import adminRouter from './routes/admin'
+import { ensureAdmin } from './lib/seed-admin'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -28,7 +31,9 @@ app.use('/api/appointments', appointmentsRouter)
 app.use('/api/favorites', favoritesRouter)
 app.use('/api/uploads', uploadsRouter)
 app.use('/api', staffRouter)
+app.use('/api', staffExtrasRouter)
 app.use('/api/photos', photosRouter)
+app.use('/api/admin', adminRouter)
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '../../client/dist')
@@ -36,6 +41,7 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')))
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`)
+  try { await ensureAdmin() } catch (e) { console.error('[admin-seed] failed:', e) }
 })

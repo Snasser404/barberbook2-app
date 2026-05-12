@@ -114,10 +114,15 @@ export default function BarberDashboard() {
           { to: '/barber/offers', icon: '🏷', label: 'Offers', desc: 'Promotions & discounts' },
           { to: '/barber/appointments', icon: '📅', label: 'Appointments', desc: 'View & manage bookings' },
         ].map((item) => (
-          <Link key={item.to} to={item.to} className="card p-4 hover:shadow-md transition-shadow">
+          <Link
+            key={item.to}
+            to={item.to}
+            className="card p-4 hover:shadow-lg hover:border-primary/40 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col group"
+          >
             <span className="text-3xl">{item.icon}</span>
-            <p className="font-semibold mt-2">{item.label}</p>
-            <p className="text-gray-400 text-xs mt-0.5">{item.desc}</p>
+            <p className="font-semibold mt-2 group-hover:text-primary transition-colors">{item.label}</p>
+            <p className="text-gray-500 text-xs mt-0.5">{item.desc}</p>
+            <span className="text-xs text-primary font-medium mt-2 group-hover:underline">Open →</span>
           </Link>
         ))}
       </div>
