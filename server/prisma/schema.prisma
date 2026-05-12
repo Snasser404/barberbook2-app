@@ -26,6 +26,10 @@ model User {
   passwordResetToken   String?
   passwordResetExpires DateTime?
 
+  // Soft-delete: when non-null, the account is suspended.
+  // Set by admin; restorable from admin dashboard.
+  deletedAt DateTime?
+
   shop            BarberShop?
   staffProfile    Staff?
   appointments    Appointment[]

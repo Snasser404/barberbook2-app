@@ -101,6 +101,12 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(data.password, user.password)
     if (!valid) { res.status(401).json({ error: 'Invalid credentials' }); return }
 
+    // Soft-deleted accounts cannot log in (admin must restore first)
+    if (user.deletedAt) {
+      res.status(403).json({ error: 'This account has been suspended. Contact support if you believe this is a mistake.' })
+      return
+    }
+
     const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' })
     const { password: _pw, emailVerificationCode: _ec, passwordResetToken: _rt, ...userWithoutPassword } = user as any
     res.json({ user: userWithoutPassword, token })
@@ -113,10 +119,12 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticate, async (req: AuthRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true, emailVerified: true },
+    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true, emailVerified: true, deletedAt: true },
   })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
-  res.json(user)
+  if (user.deletedAt) { res.status(403).json({ error: 'Account suspended' }); return }
+  const { deletedAt: _del, ...safe } = user
+  res.json(safe)
 })
 
 // Verify email with a 6-digit code sent on signup

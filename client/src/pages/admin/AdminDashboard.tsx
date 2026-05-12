@@ -4,6 +4,9 @@ import api from '../../api/client'
 import { User } from '../../types'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
+type UserStatus = 'active' | 'deleted' | 'all'
+type AdminUser = User & { createdAt: string; deletedAt?: string | null }
+
 interface Stats {
   users: number
   shops: number
@@ -23,17 +26,21 @@ interface Activity {
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<AdminUser[]>([])
   const [activity, setActivity] = useState<Activity | null>(null)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<UserStatus>('active')
   const [loading, setLoading] = useState(true)
-  const [toDelete, setToDelete] = useState<User | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  const [toSuspend, setToSuspend] = useState<AdminUser | null>(null)
+  const [toRestore, setToRestore] = useState<AdminUser | null>(null)
+  const [toPermDelete, setToPermDelete] = useState<AdminUser | null>(null)
+  const [working, setWorking] = useState(false)
 
-  const loadUsers = (s?: string, r?: string) => {
+  const loadUsers = (s?: string, r?: string, st?: UserStatus) => {
     const roleParam = (r ?? roleFilter)
-    return api.get('/admin/users', { params: { search: s || search || undefined, role: roleParam || undefined } }).then((u) => setUsers(u.data))
+    const statusParam = (st ?? statusFilter)
+    return api.get('/admin/users', { params: { search: s || search || undefined, role: roleParam || undefined, status: statusParam } }).then((u) => setUsers(u.data))
   }
 
   useEffect(() => {
@@ -49,17 +56,53 @@ export default function AdminDashboard() {
     loadUsers()
   }
 
-  const confirmDelete = async () => {
-    if (!toDelete) return
-    setDeleting(true)
+  const suspendNow = async () => {
+    if (!toSuspend) return
+    setWorking(true)
     try {
-      await api.delete(`/admin/users/${toDelete.id}`)
-      setUsers((prev) => prev.filter((u) => u.id !== toDelete.id))
-      setToDelete(null)
+      await api.delete(`/admin/users/${toSuspend.id}`)
+      if (statusFilter === 'active') {
+        setUsers((prev) => prev.filter((u) => u.id !== toSuspend.id))
+      } else {
+        setUsers((prev) => prev.map((u) => u.id === toSuspend.id ? { ...u, deletedAt: new Date().toISOString() } : u))
+      }
+      setToSuspend(null)
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Could not delete user')
+      alert(err.response?.data?.error || 'Could not suspend user')
     } finally {
-      setDeleting(false)
+      setWorking(false)
+    }
+  }
+
+  const restoreNow = async () => {
+    if (!toRestore) return
+    setWorking(true)
+    try {
+      await api.post(`/admin/users/${toRestore.id}/restore`)
+      if (statusFilter === 'deleted') {
+        setUsers((prev) => prev.filter((u) => u.id !== toRestore.id))
+      } else {
+        setUsers((prev) => prev.map((u) => u.id === toRestore.id ? { ...u, deletedAt: null } : u))
+      }
+      setToRestore(null)
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Could not restore user')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const permDeleteNow = async () => {
+    if (!toPermDelete) return
+    setWorking(true)
+    try {
+      await api.delete(`/admin/users/${toPermDelete.id}/permanent`)
+      setUsers((prev) => prev.filter((u) => u.id !== toPermDelete.id))
+      setToPermDelete(null)
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Could not permanently delete user')
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -91,6 +134,20 @@ export default function AdminDashboard() {
       {/* Users table */}
       <div className="card p-5 mb-8">
         <h2 className="font-semibold text-gray-900 mb-3">Users</h2>
+
+        {/* Status tabs */}
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {(['active', 'deleted', 'all'] as UserStatus[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => { setStatusFilter(s); loadUsers(undefined, undefined, s) }}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${statusFilter === s ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {s === 'active' ? 'Active' : s === 'deleted' ? '🚫 Suspended' : 'All'}
+            </button>
+          ))}
+        </div>
+
         <form onSubmit={onSearch} className="flex gap-2 mb-3 flex-wrap">
           <input className="input flex-1 min-w-[160px]" placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} />
           <select className="input max-w-[160px]" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); loadUsers(undefined, e.target.value) }}>
@@ -102,6 +159,7 @@ export default function AdminDashboard() {
           </select>
           <button type="submit" className="btn-primary text-sm">Search</button>
         </form>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-gray-500 border-b">
@@ -110,23 +168,43 @@ export default function AdminDashboard() {
                 <th className="py-2 pr-2">Email</th>
                 <th className="py-2 pr-2">Role</th>
                 <th className="py-2 pr-2">Joined</th>
-                <th className="py-2 pr-2"></th>
+                <th className="py-2 pr-2">Status</th>
+                <th className="py-2 pr-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                  <td className="py-2 pr-2 font-medium">{u.name}</td>
-                  <td className="py-2 pr-2 text-gray-600">{u.email}</td>
-                  <td className="py-2 pr-2">
-                    <span className={`badge text-xs ${u.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' : u.role === 'BARBER' ? 'bg-blue-100 text-blue-800' : u.role === 'STAFF' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{u.role}</span>
-                  </td>
-                  <td className="py-2 pr-2 text-gray-500 text-xs">{new Date((u as any).createdAt).toLocaleDateString()}</td>
-                  <td className="py-2 pr-2 text-right">
-                    <button onClick={() => setToDelete(u)} className="text-xs text-red-500 hover:underline">Delete</button>
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const suspended = !!u.deletedAt
+                return (
+                  <tr key={u.id} className={`border-b last:border-b-0 hover:bg-gray-50 ${suspended ? 'opacity-60' : ''}`}>
+                    <td className="py-2 pr-2 font-medium">{u.name}</td>
+                    <td className="py-2 pr-2 text-gray-600">{u.email}</td>
+                    <td className="py-2 pr-2">
+                      <span className={`badge text-xs ${u.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' : u.role === 'BARBER' ? 'bg-blue-100 text-blue-800' : u.role === 'STAFF' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{u.role}</span>
+                    </td>
+                    <td className="py-2 pr-2 text-gray-500 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 pr-2">
+                      {suspended ? (
+                        <span className="badge bg-amber-100 text-amber-800 text-xs">Suspended</span>
+                      ) : (
+                        <span className="badge bg-green-100 text-green-800 text-xs">Active</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-2 text-right">
+                      <div className="flex gap-2 justify-end flex-wrap">
+                        {suspended ? (
+                          <>
+                            <button onClick={() => setToRestore(u)} className="text-xs text-green-600 hover:underline">Restore</button>
+                            <button onClick={() => setToPermDelete(u)} className="text-xs text-red-700 hover:underline">Delete forever</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setToSuspend(u)} className="text-xs text-amber-600 hover:underline">Suspend</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {users.length === 0 && <p className="text-gray-400 text-center py-6 text-sm">No users match those filters.</p>}
@@ -175,15 +253,40 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Suspend (soft-delete) — reversible */}
       <ConfirmDialog
-        open={!!toDelete}
-        title="Delete this user?"
-        message={toDelete ? `Deleting ${toDelete.name} (${toDelete.email}) will permanently remove:\n\n• Their appointments, reviews, photos and favorites\n${toDelete.role === 'BARBER' ? '• Their entire shop including services, offers, staff, and all shop reviews\n' : ''}${toDelete.role === 'STAFF' ? '• Their staff profile, portfolio, and all reviews about them\n' : ''}\nThis cannot be undone.` : undefined}
-        confirmLabel="Delete user"
+        open={!!toSuspend}
+        title="Suspend this account?"
+        message={toSuspend ? `${toSuspend.name} (${toSuspend.email}) will no longer be able to log in.\n\nAll their data is preserved and you can restore the account anytime from the "Suspended" tab.\n\nThis is reversible.` : undefined}
+        confirmLabel="Suspend"
         tone="danger"
-        loading={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => setToDelete(null)}
+        loading={working}
+        onConfirm={suspendNow}
+        onCancel={() => setToSuspend(null)}
+      />
+
+      {/* Restore — confirm before re-enabling */}
+      <ConfirmDialog
+        open={!!toRestore}
+        title="Restore this account?"
+        message={toRestore ? `${toRestore.name} (${toRestore.email}) will be able to log in again. All their previous data is intact.` : undefined}
+        confirmLabel="Restore"
+        tone="primary"
+        loading={working}
+        onConfirm={restoreNow}
+        onCancel={() => setToRestore(null)}
+      />
+
+      {/* Permanent delete — wipes data forever */}
+      <ConfirmDialog
+        open={!!toPermDelete}
+        title="Permanently delete this account?"
+        message={toPermDelete ? `⚠ This is IRREVERSIBLE.\n\n${toPermDelete.name} (${toPermDelete.email}) will be permanently wiped, along with:\n\n• Their appointments, reviews, photos and favorites\n${toPermDelete.role === 'BARBER' ? '• Their entire shop including services, offers, staff, and shop reviews\n' : ''}${toPermDelete.role === 'STAFF' ? '• Their staff profile, portfolio, and all reviews about them\n' : ''}\nThe email will become free for someone else to register with.\n\nIf you just want to disable login, use Suspend instead.` : undefined}
+        confirmLabel="Yes, delete forever"
+        tone="danger"
+        loading={working}
+        onConfirm={permDeleteNow}
+        onCancel={() => setToPermDelete(null)}
       />
     </div>
   )
