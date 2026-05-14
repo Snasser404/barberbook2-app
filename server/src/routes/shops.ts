@@ -343,7 +343,7 @@ router.delete('/:shopId/reviews/:id', authenticate, async (req: AuthRequest, res
 // ── Availability ───────────────────────────────────────────────────────────
 
 router.get('/:shopId/availability', async (req, res) => {
-  const { date, serviceId } = req.query
+  const { date, serviceId, staffId } = req.query
   if (!date || !serviceId) { res.status(400).json({ error: 'date and serviceId are required' }); return }
 
   const shop = await prisma.barberShop.findUnique({ where: { id: req.params.shopId } })
@@ -366,9 +366,17 @@ router.get('/:shopId/availability', async (req, res) => {
     current += 30
   }
 
-  // Remove booked slots
+  // Each barber (staff) has an independent schedule. If staffId is provided,
+  // only block slots that conflict with THAT staff's appointments.
+  // If no staffId, block only "any barber" appointments (those without staffId).
+  // This prevents a booking with barber B from blocking barber C's slots.
   const booked = await prisma.appointment.findMany({
-    where: { shopId: req.params.shopId, date: String(date), status: { in: ['PENDING', 'CONFIRMED'] } },
+    where: {
+      shopId: req.params.shopId,
+      date: String(date),
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      ...(staffId ? { staffId: String(staffId) } : { staffId: null }),
+    },
     include: { service: true },
   })
 

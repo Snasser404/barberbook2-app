@@ -9,6 +9,32 @@ export interface User {
   role: Role
   avatar?: string
   emailVerified?: boolean
+  isSuperAdmin?: boolean
+}
+
+export interface AuditLogEntry {
+  id: string
+  actorId?: string | null
+  actorEmail?: string | null
+  action: string
+  targetType?: string | null
+  targetId?: string | null
+  metadata?: string | null
+  createdAt: string
+}
+
+export interface SupportTicket {
+  id: string
+  userId?: string | null
+  email: string
+  name: string
+  subject?: string | null
+  message: string
+  status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED'
+  adminReply?: string | null
+  repliedAt?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED'

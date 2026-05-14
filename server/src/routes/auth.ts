@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import crypto from 'crypto'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { validatePassword, PASSWORD_MIN_LENGTH } from '../lib/password'
-import { sendVerificationEmail, sendPasswordResetEmail, generateVerificationCode, getAppUrl } from '../lib/email'
+import { sendVerificationEmail, sendPasswordResetEmail, generateVerificationCode } from '../lib/email'
+import { validatePhone } from '../lib/phone'
 
 const router = Router()
 
@@ -29,6 +29,13 @@ router.post('/register', async (req, res) => {
 
     const pw = validatePassword(data.password)
     if (!pw.ok) { res.status(400).json({ error: pw.error }); return }
+
+    // Phone validation when provided
+    if (data.phone) {
+      const ph = validatePhone(data.phone)
+      if (!ph.ok) { res.status(400).json({ error: ph.error }); return }
+      data.phone = ph.normalized
+    }
 
     const existing = await prisma.user.findUnique({ where: { email: data.email } })
     if (existing) { res.status(400).json({ error: 'An account with this email already exists' }); return }
@@ -168,58 +175,75 @@ router.post('/resend-verification', authenticate, async (req: AuthRequest, res) 
   res.json({ success: true })
 })
 
-// Forgot password — send reset email. Always return success (don't leak which emails exist).
+// Forgot password — sends a 6-digit code by email.
+// Always returns success so we don't leak which emails exist.
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body
   if (!email || typeof email !== 'string') { res.status(400).json({ error: 'Email required' }); return }
   const normalized = email.toLowerCase().trim()
 
   const user = await prisma.user.findUnique({ where: { email: normalized } })
-  if (user) {
-    const token = crypto.randomBytes(32).toString('hex')
+  if (user && !user.deletedAt) {
+    const code = generateVerificationCode()
     const expires = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordResetToken: token, passwordResetExpires: expires },
+      data: { passwordResetCode: code, passwordResetExpires: expires },
     })
-    const resetLink = `${getAppUrl()}/reset-password?token=${token}`
-    sendPasswordResetEmail(user.email, user.name, resetLink).catch(() => {})
+    sendPasswordResetEmail(user.email, user.name, code).catch(() => {})
   }
-  // Always return success — security best-practice to not reveal account existence
   res.json({ success: true })
 })
 
-// Reset password using token from email
+// Reset password using email + code + new password.
 router.post('/reset-password', async (req, res) => {
-  const { token, newPassword } = req.body
-  if (!token || !newPassword) { res.status(400).json({ error: 'Token and new password are required' }); return }
+  const { email, code, newPassword } = req.body
+  if (!email || !code || !newPassword) {
+    res.status(400).json({ error: 'Email, code, and new password are required' })
+    return
+  }
 
   const pw = validatePassword(newPassword)
   if (!pw.ok) { res.status(400).json({ error: pw.error }); return }
 
-  const user = await prisma.user.findFirst({
-    where: {
-      passwordResetToken: String(token),
-      passwordResetExpires: { gt: new Date() },
-    },
-  })
-  if (!user) { res.status(400).json({ error: 'Invalid or expired reset link' }); return }
+  const normalized = String(email).toLowerCase().trim()
+  const user = await prisma.user.findUnique({ where: { email: normalized } })
+  if (!user || !user.passwordResetCode || user.passwordResetCode !== String(code).trim()) {
+    res.status(400).json({ error: 'Invalid email or reset code' })
+    return
+  }
+  if (user.passwordResetExpires && user.passwordResetExpires < new Date()) {
+    res.status(400).json({ error: 'Reset code has expired — request a new one' })
+    return
+  }
 
   const hashed = await bcrypt.hash(newPassword, 10)
   await prisma.user.update({
     where: { id: user.id },
-    data: { password: hashed, passwordResetToken: null, passwordResetExpires: null },
+    data: { password: hashed, passwordResetCode: null, passwordResetToken: null, passwordResetExpires: null },
   })
   res.json({ success: true })
 })
 
 router.put('/me', authenticate, async (req: AuthRequest, res) => {
   const { name, phone, avatar } = req.body
+
+  let phoneNormalized: string | null | undefined = undefined
+  if (phone !== undefined) {
+    if (phone === null || phone === '') {
+      phoneNormalized = null
+    } else {
+      const ph = validatePhone(phone)
+      if (!ph.ok) { res.status(400).json({ error: ph.error }); return }
+      phoneNormalized = ph.normalized
+    }
+  }
+
   const user = await prisma.user.update({
     where: { id: req.userId },
     data: {
       name: name !== undefined ? name : undefined,
-      phone: phone !== undefined ? phone : undefined,
+      phone: phoneNormalized,
       avatar: avatar !== undefined ? avatar : undefined,
     },
     select: { id: true, email: true, name: true, role: true, phone: true, avatar: true },

@@ -78,11 +78,29 @@ export default function StaffDashboard() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold text-primary">Hi {staff.name.split(' ')[0]} 👋</h1>
-          {staff.shop && (
+          {staff.shop ? (
             <p className="text-gray-500 text-sm">working at <Link to={`/shops/${staff.shop.id}`} className="text-primary hover:underline">{staff.shop.name}</Link></p>
+          ) : (
+            <p className="text-amber-700 text-sm">Not currently working at any shop. Ask a shop owner to invite you.</p>
           )}
         </div>
-        <Link to={`/staff/${staff.id}`} className="btn-outline text-sm">View public profile →</Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link to={`/staff/${staff.id}`} className="btn-outline text-sm">View public profile →</Link>
+          {staff.shop && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Leave ${staff.shop?.name}? Your reviews and portfolio stay with you. Past appointments stay with the shop.`)) return
+                try {
+                  await api.post('/staff/me/leave-shop')
+                  load()
+                } catch (err: any) { alert(err.response?.data?.error || 'Failed') }
+              }}
+              className="text-sm text-amber-600 hover:underline"
+            >
+              Leave shop
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}

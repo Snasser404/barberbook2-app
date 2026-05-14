@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import api from '../api/client'
 import AvatarUploader from '../components/AvatarUploader'
 import PasswordField, { isPasswordValid } from '../components/PasswordField'
+import PhoneInput from '../components/PhoneInput'
 
 export default function CustomerProfile() {
   const { user, updateUser } = useAuth()
@@ -92,10 +93,7 @@ export default function CustomerProfile() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
             <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input type="tel" className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Optional" />
-          </div>
+          <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} label="Phone (optional)" />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input className="input bg-gray-50" value={user?.email} disabled />

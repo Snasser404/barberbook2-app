@@ -53,6 +53,42 @@ router.put('/staff/me', authenticate, requireStaff, async (req: AuthRequest, res
   res.json(updated)
 })
 
+// Staff: leave their current shop (sets shopId = null). Their reviews, portfolio
+// and rating stay with them. Past appointments remain attached to the old shop.
+router.post('/staff/me/leave-shop', authenticate, requireStaff, async (req: AuthRequest, res) => {
+  const staff = await prisma.staff.findUnique({ where: { userId: req.userId } })
+  if (!staff) { res.status(404).json({ error: 'Staff profile not found' }); return }
+  if (!staff.shopId) { res.json({ success: true, alreadyUnattached: true }); return }
+
+  await prisma.staff.update({ where: { id: staff.id }, data: { shopId: null } })
+  res.json({ success: true })
+})
+
+// Owner: invite an existing barber (by user email) to join their shop.
+// This works for barbers who already have a Staff profile (e.g. previously worked
+// at another shop and now want to join yours).
+router.post('/shops/:shopId/staff/invite', authenticate, requireBarber, async (req: AuthRequest, res) => {
+  const shop = await prisma.barberShop.findUnique({ where: { id: req.params.shopId } })
+  if (!shop || shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
+
+  const email = String(req.body.email || '').toLowerCase().trim()
+  if (!email) { res.status(400).json({ error: 'Email required' }); return }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { staffProfile: true },
+  })
+  if (!user) { res.status(404).json({ error: 'No account with that email. Ask them to register first, or create a fresh staff entry instead.' }); return }
+  if (!user.staffProfile) { res.status(400).json({ error: 'That user does not have a staff profile yet. Create one from this shop instead.' }); return }
+  if (user.staffProfile.shopId === shop.id) { res.status(400).json({ error: 'They are already part of your shop' }); return }
+
+  const updated = await prisma.staff.update({
+    where: { id: user.staffProfile.id },
+    data: { shopId: shop.id, isActive: true },
+  })
+  res.status(200).json(updated)
+})
+
 // Public: individual staff with reviews
 router.get('/staff/:id', async (req, res) => {
   const staff = await prisma.staff.findUnique({
@@ -101,10 +137,10 @@ router.post('/shops/:shopId/staff', authenticate, requireBarber, async (req: Aut
   res.status(201).json(staff)
 })
 
-// Owner-only: update staff
+// Owner-only: update staff (must be attached to the owner's shop)
 router.put('/staff/:id', authenticate, requireBarber, async (req: AuthRequest, res) => {
   const staff = await prisma.staff.findUnique({ where: { id: req.params.id }, include: { shop: true } })
-  if (!staff || staff.shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!staff || !staff.shop || staff.shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const { name, bio, avatar, specialties, isActive } = req.body
   const updated = await prisma.staff.update({
@@ -114,10 +150,10 @@ router.put('/staff/:id', authenticate, requireBarber, async (req: AuthRequest, r
   res.json(updated)
 })
 
-// Owner-only: delete staff
+// Owner-only: delete staff (must be attached to the owner's shop)
 router.delete('/staff/:id', authenticate, requireBarber, async (req: AuthRequest, res) => {
   const staff = await prisma.staff.findUnique({ where: { id: req.params.id }, include: { shop: true } })
-  if (!staff || staff.shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!staff || !staff.shop || staff.shop.ownerId !== req.userId) { res.status(403).json({ error: 'Forbidden' }); return }
 
   await prisma.staff.delete({ where: { id: req.params.id } })
   res.json({ success: true })

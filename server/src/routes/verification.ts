@@ -6,6 +6,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireBarber, requireAdmin, AuthRequest } from '../middleware/auth'
 import { upload } from './uploads'
+import { audit } from '../lib/audit'
 
 const router = Router()
 
@@ -95,6 +96,8 @@ router.post('/admin/shops/:id/verify', authenticate, requireAdmin, async (req: A
       verificationNotes: null,
     },
   })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'SHOP_VERIFIED', targetType: 'SHOP', targetId: shop.id, metadata: { name: shop.name } })
   res.json(updated)
 })
 
@@ -118,6 +121,8 @@ router.post('/admin/shops/:id/reject', authenticate, requireAdmin, async (req: A
       verificationNotes: reason.trim(),
     },
   })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'SHOP_REJECTED', targetType: 'SHOP', targetId: shop.id, metadata: { name: shop.name, reason: reason.trim() } })
   res.json(updated)
 })
 

@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import api from '../api/client'
 import PasswordField, { isPasswordValid } from '../components/PasswordField'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
-  const [params] = useSearchParams()
-  const token = params.get('token') || ''
+  const location = useLocation()
+  const initialEmail = (location.state as any)?.email || ''
+
+  const [email, setEmail] = useState(initialEmail)
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -15,11 +18,14 @@ export default function ResetPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    if (!token) { setError('Invalid reset link — no token'); return }
+    if (!email || !code || code.length !== 6) {
+      setError('Enter your email and the 6-digit code from your email')
+      return
+    }
     if (!isPasswordValid(password)) { setError('Password does not meet the requirements'); return }
     setLoading(true)
     try {
-      await api.post('/auth/reset-password', { token, newPassword: password })
+      await api.post('/auth/reset-password', { email, code, newPassword: password })
       setDone(true)
       setTimeout(() => navigate('/login'), 2500)
     } catch (err: any) {
@@ -34,7 +40,8 @@ export default function ResetPassword() {
       <div className="card p-8 w-full max-w-md">
         <div className="text-center mb-6">
           <span className="text-4xl">🔑</span>
-          <h1 className="text-2xl font-bold text-primary mt-2">Choose a new password</h1>
+          <h1 className="text-2xl font-bold text-primary mt-2">Reset password</h1>
+          <p className="text-gray-500 text-sm mt-1">Enter the 6-digit code we emailed you</p>
         </div>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">{error}</div>}
@@ -48,11 +55,32 @@ export default function ResetPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" className="input" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">6-digit reset code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                className="input text-center text-2xl tracking-[0.4em] font-mono"
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                required
+              />
+            </div>
             <PasswordField label="New password" value={password} onChange={setPassword} />
             <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
               {loading ? 'Updating...' : 'Update password'}
             </button>
-            <Link to="/login" className="block text-center text-sm text-gray-500 hover:underline">← Back to sign in</Link>
+            <div className="flex justify-between text-xs">
+              <Link to="/forgot-password" className="text-primary hover:underline">Need a new code?</Link>
+              <Link to="/login" className="text-gray-500 hover:underline">← Back to sign in</Link>
+            </div>
           </form>
         )}
       </div>

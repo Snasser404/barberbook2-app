@@ -3,7 +3,7 @@ import api from '../../api/client'
 import { Staff, BarberShop } from '../../types'
 import StarRating from '../../components/StarRating'
 import AvatarUploader from '../../components/AvatarUploader'
-import PasswordField, { isPasswordValid } from '../../components/PasswordField'
+import { isPasswordValid } from '../../components/PasswordField'
 
 export default function ManageStaff() {
   const [shop, setShop] = useState<BarberShop | null>(null)
@@ -11,9 +11,14 @@ export default function ManageStaff() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Staff | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', bio: '', avatar: '', specialties: '', email: '', password: '', createLogin: false })
+  const [form, setForm] = useState({ name: '', bio: '', avatar: '', specialties: '', email: '', password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // "Transfer existing" flow
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteSaving, setInviteSaving] = useState(false)
+  const [inviteError, setInviteError] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -29,9 +34,18 @@ export default function ManageStaff() {
 
   useEffect(() => { load() }, [])
 
+  const generateTempPassword = () => {
+    // Easy-to-share temp password: word + 4 digits, but still meets validator
+    // (8+ chars, upper, lower, number)
+    const words = ['Sunny', 'Quick', 'Sharp', 'Smart', 'Bold', 'Fresh', 'Lucky', 'Brave', 'Calm', 'Cool']
+    const w = words[Math.floor(Math.random() * words.length)]
+    const n = Math.floor(1000 + Math.random() * 9000)
+    return `${w}${n}` // e.g. Sunny4729 — meets all rules
+  }
+
   const startNew = () => {
     setEditing(null)
-    setForm({ name: '', bio: '', avatar: '', specialties: '', email: '', password: '', createLogin: false })
+    setForm({ name: '', bio: '', avatar: '', specialties: '', email: '', password: generateTempPassword() })
     setError('')
     setShowForm(true)
   }
@@ -45,7 +59,6 @@ export default function ManageStaff() {
       specialties: s.specialties || '',
       email: '',
       password: '',
-      createLogin: false,
     })
     setError('')
     setShowForm(true)
@@ -62,20 +75,20 @@ export default function ManageStaff() {
         const { data } = await api.put(`/staff/${editing.id}`, { name, bio, avatar, specialties })
         setStaff((prev) => prev.map((s) => s.id === editing.id ? data : s))
       } else {
-        const payload: any = { name: form.name, bio: form.bio, avatar: form.avatar, specialties: form.specialties }
-        if (form.createLogin) {
-          if (!form.email || !form.password) {
-            setError('Email and password required to create a login')
-            setSaving(false)
-            return
-          }
-          if (!isPasswordValid(form.password)) {
-            setError('Password does not meet the requirements (8+ chars, uppercase, lowercase, number)')
-            setSaving(false)
-            return
-          }
-          payload.email = form.email
-          payload.password = form.password
+        // Email is mandatory now — every barber must be able to sign in
+        if (!form.email) {
+          setError('Email is required for the barber to sign in')
+          setSaving(false)
+          return
+        }
+        if (!form.password || !isPasswordValid(form.password)) {
+          setError('Password must be at least 8 chars with uppercase, lowercase and a number')
+          setSaving(false)
+          return
+        }
+        const payload: any = {
+          name: form.name, bio: form.bio, avatar: form.avatar, specialties: form.specialties,
+          email: form.email, password: form.password,
         }
         const { data } = await api.post(`/shops/${shop.id}/staff`, payload)
         setStaff((prev) => [...prev, data])
@@ -99,6 +112,21 @@ export default function ManageStaff() {
     setStaff((prev) => prev.filter((x) => x.id !== s.id))
   }
 
+  const inviteExisting = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!shop) return
+    setInviteSaving(true)
+    setInviteError('')
+    try {
+      const { data } = await api.post(`/shops/${shop.id}/staff/invite`, { email: inviteEmail })
+      setStaff((prev) => [...prev, data])
+      setShowInvite(false)
+      setInviteEmail('')
+    } catch (err: any) {
+      setInviteError(err.response?.data?.error || 'Could not invite')
+    } finally { setInviteSaving(false) }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
   if (!shop) return <div className="text-center py-20 text-gray-500">Set up your shop first</div>
 
@@ -106,7 +134,10 @@ export default function ManageStaff() {
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-primary">Manage Team</h1>
-        <button onClick={startNew} className="btn-primary text-sm">+ Add barber</button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => { setShowInvite(true); setInviteEmail(''); setInviteError('') }} className="btn-outline text-sm">📨 Invite existing</button>
+          <button onClick={startNew} className="btn-primary text-sm">+ Add new barber</button>
+        </div>
       </div>
 
       <p className="text-gray-500 text-sm mb-6">Customers can browse your team, see each barber's specialties and ratings, and book directly with their favorite.</p>
@@ -161,8 +192,8 @@ export default function ManageStaff() {
 
       {/* Add/edit modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setShowForm(false)}>
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => !saving && setShowForm(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-primary mb-4">{editing ? 'Edit barber' : 'Add a barber'}</h3>
             {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
             <form onSubmit={submit} className="space-y-3">
@@ -189,37 +220,69 @@ export default function ManageStaff() {
                 />
               </div>
 
-              {/* Login section — only when adding new */}
+              {/* Login fields — always required for new barbers */}
               {!editing && (
-                <div className="border-t pt-3">
-                  <label className="flex items-start gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form.createLogin} onChange={(e) => setForm({ ...form, createLogin: e.target.checked })} className="mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Create login for this barber</p>
-                      <p className="text-xs text-gray-500">They'll be able to sign in to manage their own profile and see their appointments. Leave unchecked for display-only profiles.</p>
-                    </div>
-                  </label>
-                  {form.createLogin && (
-                    <div className="space-y-3 mt-3 pl-6">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
-                        <input type="email" className="input text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="barber@example.com" required={form.createLogin} />
-                      </div>
-                      <PasswordField
-                        label="Temporary password"
+                <div className="border-t pt-3 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Login details *</p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Email *</label>
+                    <input
+                      type="email"
+                      className="input text-sm"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="barber@example.com"
+                      required
+                    />
+                    <p className="text-xs text-gray-400 mt-1">They'll use this to sign in.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Temporary password *</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="input text-sm flex-1 font-mono"
                         value={form.password}
-                        onChange={(v) => setForm({ ...form, password: v })}
-                        placeholder="Share with the barber to sign in first time"
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        required
+                        minLength={8}
                       />
-                      <p className="text-xs text-gray-500 -mt-1">Share with them — they can change it after first sign-in.</p>
+                      <button type="button" onClick={() => setForm({ ...form, password: generateTempPassword() })} className="btn-outline text-xs">↻ New</button>
                     </div>
-                  )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      <strong>Share this with them.</strong> They can change it after their first sign-in. Must be 8+ chars with upper, lower &amp; a number.
+                    </p>
+                  </div>
                 </div>
               )}
 
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} disabled={saving} className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancel</button>
                 <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm">{saving ? 'Saving...' : editing ? 'Save changes' : 'Add barber'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite existing barber (transfer from another shop or unattached) */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !inviteSaving && setShowInvite(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-primary mb-2">Invite an existing barber</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              If a barber already has a BarberBook account (e.g. previously worked at another shop),
+              enter their email and they'll be added to your team. Their reviews, portfolio and rating come with them.
+            </p>
+            {inviteError && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-3">{inviteError}</div>}
+            <form onSubmit={inviteExisting} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Barber's email *</label>
+                <input type="email" className="input" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setShowInvite(false)} disabled={inviteSaving} className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancel</button>
+                <button type="submit" disabled={inviteSaving} className="flex-1 btn-primary text-sm">{inviteSaving ? 'Inviting…' : 'Invite'}</button>
               </div>
             </form>
           </div>

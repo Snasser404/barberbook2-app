@@ -15,6 +15,7 @@ import MyPhotos from './pages/MyPhotos'
 import VerifyEmail from './pages/VerifyEmail'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+import Support from './pages/Support'
 import BarberDashboard from './pages/barber/BarberDashboard'
 import ManageShop from './pages/barber/ManageShop'
 import ManageServices from './pages/barber/ManageServices'
@@ -37,7 +38,7 @@ function AppRoutes() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <VerifyEmailBanner />
-      <main className="flex-1">
+      <main className="flex-1 pb-12">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -45,6 +46,7 @@ function AppRoutes() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<ProtectedRoute><VerifyEmail /></ProtectedRoute>} />
+          <Route path="/support" element={<Support />} />
           <Route path="/shops/:id" element={<ShopDetail />} />
           <Route path="/staff/:id" element={<StaffProfile />} />
           <Route path="/shops/:id/book" element={<ProtectedRoute role="CUSTOMER"><BookAppointment /></ProtectedRoute>} />
@@ -63,6 +65,12 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <footer className="border-t border-gray-200 bg-gray-50 py-4 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between gap-3 flex-wrap text-sm text-gray-500">
+          <span>© BarberBook</span>
+          <a href="/support" className="hover:text-primary hover:underline">Contact support</a>
+        </div>
+      </footer>
     </div>
   )
 }

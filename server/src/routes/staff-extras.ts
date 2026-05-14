@@ -23,8 +23,8 @@ router.get('/staff/:id/portfolio', async (req, res) => {
 async function canManageStaffPortfolio(staffId: string, userId: string, userRole: string) {
   const staff = await prisma.staff.findUnique({ where: { id: staffId }, include: { shop: true } })
   if (!staff) return null
-  // Owner of the shop can manage
-  if (staff.shop.ownerId === userId) return staff
+  // Owner of the shop can manage (if staff is attached to a shop and that shop's owner is the user)
+  if (staff.shop && staff.shop.ownerId === userId) return staff
   // Staff member themselves can manage their own
   if (userRole === 'STAFF' && staff.userId === userId) return staff
   return null

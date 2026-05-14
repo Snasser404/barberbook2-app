@@ -10,6 +10,7 @@ export default function Login() {
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
+  const [suspended, setSuspended] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,7 +28,9 @@ export default function Login() {
         : '/'
       navigate(target, { replace: true })
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed')
+      const msg = err.response?.data?.error || 'Login failed'
+      setError(msg)
+      setSuspended(err.response?.status === 403 && typeof msg === 'string' && msg.toLowerCase().includes('suspended'))
     } finally {
       setLoading(false)
     }
@@ -42,7 +45,22 @@ export default function Login() {
           <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
         </div>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">{error}</div>}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+            {error}
+            {suspended && (
+              <div className="mt-2">
+                <Link
+                  to="/support"
+                  state={{ subject: `Suspended account: ${form.email}` }}
+                  className="text-primary font-medium underline"
+                >
+                  Contact support →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

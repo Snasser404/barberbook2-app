@@ -3,8 +3,16 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth'
 import { validatePassword } from '../lib/password'
+import { audit } from '../lib/audit'
 
 const router = Router()
+
+// Helper — refuse any destructive action on the super admin
+async function ensureNotSuperAdmin(userId: string): Promise<{ ok: boolean; error?: string }> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { isSuperAdmin: true } })
+  if (u?.isSuperAdmin) return { ok: false, error: 'This is the platform owner — they cannot be modified by other admins.' }
+  return { ok: true }
+}
 
 // Aggregate platform stats
 router.get('/stats', authenticate, requireAdmin, async (_req, res) => {
@@ -43,7 +51,7 @@ router.get('/users', authenticate, requireAdmin, async (req: AuthRequest, res) =
       ] } : {}),
       ...deletedFilter,
     },
-    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true, createdAt: true, deletedAt: true },
+    select: { id: true, email: true, name: true, role: true, phone: true, avatar: true, createdAt: true, deletedAt: true, isSuperAdmin: true },
     orderBy: { createdAt: 'desc' },
     take: 100,
   })
@@ -69,6 +77,9 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: AuthRequest,
     res.status(400).json({ error: 'You cannot suspend your own admin account' })
     return
   }
+  const protectCheck = await ensureNotSuperAdmin(req.params.id)
+  if (!protectCheck.ok) { res.status(403).json({ error: protectCheck.error }); return }
+
   const user = await prisma.user.findUnique({ where: { id: req.params.id } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
   if (user.deletedAt) { res.json({ success: true, alreadySuspended: true }); return }
@@ -77,6 +88,8 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: AuthRequest,
     where: { id: req.params.id },
     data: { deletedAt: new Date() },
   })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'USER_SUSPENDED', targetType: 'USER', targetId: user.id, metadata: { email: user.email, role: user.role } })
   res.json({ success: true })
 })
 
@@ -90,6 +103,8 @@ router.post('/users/:id/restore', authenticate, requireAdmin, async (req: AuthRe
     where: { id: req.params.id },
     data: { deletedAt: null },
   })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'USER_RESTORED', targetType: 'USER', targetId: user.id, metadata: { email: user.email } })
   res.json({ success: true })
 })
 
@@ -139,15 +154,20 @@ router.post('/admins', authenticate, requireAdmin, async (req: AuthRequest, res)
     data: { email: rawEmail, password: hashed, name: name.trim(), role: 'ADMIN', emailVerified: true },
     select: { id: true, email: true, name: true, role: true, createdAt: true, deletedAt: true },
   })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'ADMIN_CREATED', targetType: 'USER', targetId: user.id, metadata: { email: user.email } })
   res.status(201).json({ user, created: true })
 })
 
-// Demote an admin back to CUSTOMER. Can't demote yourself.
+// Demote an admin back to CUSTOMER. Can't demote yourself or the super admin.
 router.post('/users/:id/demote', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   if (req.params.id === req.userId) {
     res.status(400).json({ error: 'You cannot remove your own admin role' })
     return
   }
+  const protectCheck = await ensureNotSuperAdmin(req.params.id)
+  if (!protectCheck.ok) { res.status(403).json({ error: protectCheck.error }); return }
+
   const user = await prisma.user.findUnique({ where: { id: req.params.id } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
   if (user.role !== 'ADMIN') { res.status(400).json({ error: 'User is not an admin' }); return }
@@ -160,6 +180,8 @@ router.post('/users/:id/demote', authenticate, requireAdmin, async (req: AuthReq
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { role: 'CUSTOMER' } })
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'ADMIN_DEMOTED', targetType: 'USER', targetId: user.id, metadata: { email: user.email } })
   res.json({ success: true })
 })
 
@@ -170,6 +192,8 @@ router.delete('/users/:id/permanent', authenticate, requireAdmin, async (req: Au
     res.status(400).json({ error: 'You cannot permanently delete your own admin account' })
     return
   }
+  const protectCheck = await ensureNotSuperAdmin(req.params.id)
+  if (!protectCheck.ok) { res.status(403).json({ error: protectCheck.error }); return }
   const userId = req.params.id
 
   try {
@@ -203,6 +227,9 @@ router.delete('/users/:id/permanent', authenticate, requireAdmin, async (req: Au
 
       await tx.user.delete({ where: { id: userId } })
     }, { timeout: 15000 })
+
+    const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+    audit({ actorId: req.userId, actorEmail: actor?.email, action: 'USER_DELETED_PERMANENTLY', targetType: 'USER', targetId: userId, metadata: { email: user.email, role: user.role } })
 
     res.json({ success: true })
   } catch (err) {
@@ -238,6 +265,165 @@ router.get('/activity', authenticate, requireAdmin, async (_req, res) => {
     }),
   ])
   res.json({ recentAppts, recentReviews, recentUsers })
+})
+
+// ── Admin: reviews moderation ────────────────────────────────────────────────
+
+router.get('/reviews', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const { search } = req.query
+  const reviews = await prisma.review.findMany({
+    where: search ? { comment: { contains: String(search) } } : {},
+    include: {
+      customer: { select: { id: true, name: true, email: true } },
+      shop: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  })
+  res.json(reviews)
+})
+
+router.delete('/reviews/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const review = await prisma.review.findUnique({ where: { id: req.params.id } })
+  if (!review) { res.status(404).json({ error: 'Review not found' }); return }
+
+  await prisma.review.delete({ where: { id: req.params.id } })
+
+  // Recompute shop rating
+  const reviews = await prisma.review.findMany({ where: { shopId: review.shopId } })
+  const avg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0
+  await prisma.barberShop.update({
+    where: { id: review.shopId },
+    data: { rating: Math.round(avg * 10) / 10, reviewCount: reviews.length },
+  })
+
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'REVIEW_DELETED', targetType: 'REVIEW', targetId: review.id, metadata: { shopId: review.shopId, customerId: review.customerId, rating: review.rating, comment: review.comment } })
+
+  res.json({ success: true })
+})
+
+// Also: staff reviews moderation
+router.delete('/staff-reviews/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const review = await prisma.staffReview.findUnique({ where: { id: req.params.id } })
+  if (!review) { res.status(404).json({ error: 'Review not found' }); return }
+
+  await prisma.staffReview.delete({ where: { id: req.params.id } })
+
+  // Recompute staff rating
+  const remaining = await prisma.staffReview.findMany({ where: { staffId: review.staffId } })
+  const avg = remaining.length ? remaining.reduce((s, r) => s + r.rating, 0) / remaining.length : 0
+  await prisma.staff.update({
+    where: { id: review.staffId },
+    data: { rating: Math.round(avg * 10) / 10, reviewCount: remaining.length },
+  })
+
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'STAFF_REVIEW_DELETED', targetType: 'STAFF_REVIEW', targetId: review.id })
+
+  res.json({ success: true })
+})
+
+// ── Admin: shops moderation ──────────────────────────────────────────────────
+
+router.put('/shops/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const shop = await prisma.barberShop.findUnique({ where: { id: req.params.id } })
+  if (!shop) { res.status(404).json({ error: 'Shop not found' }); return }
+
+  const { name, address, description, phone, openingTime, closingTime, latitude, longitude } = req.body
+  const updated = await prisma.barberShop.update({
+    where: { id: req.params.id },
+    data: {
+      name, address, description, phone, openingTime, closingTime,
+      latitude: latitude !== undefined ? (latitude === null ? null : Number(latitude)) : undefined,
+      longitude: longitude !== undefined ? (longitude === null ? null : Number(longitude)) : undefined,
+    },
+  })
+
+  const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+  audit({ actorId: req.userId, actorEmail: actor?.email, action: 'SHOP_EDITED_BY_ADMIN', targetType: 'SHOP', targetId: shop.id, metadata: { changes: req.body } })
+
+  res.json(updated)
+})
+
+router.delete('/shops/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const shop = await prisma.barberShop.findUnique({ where: { id: req.params.id } })
+  if (!shop) { res.status(404).json({ error: 'Shop not found' }); return }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Non-cascading children of shop
+      await tx.appointment.deleteMany({ where: { shopId: shop.id } })
+      await tx.review.deleteMany({ where: { shopId: shop.id } })
+      await tx.favorite.deleteMany({ where: { shopId: shop.id } })
+      // Cascade handles services/offers/images/staff/verificationDocs
+      await tx.barberShop.delete({ where: { id: shop.id } })
+    }, { timeout: 15000 })
+
+    const actor = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } })
+    audit({ actorId: req.userId, actorEmail: actor?.email, action: 'SHOP_DELETED', targetType: 'SHOP', targetId: shop.id, metadata: { name: shop.name, ownerId: shop.ownerId } })
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[admin delete shop]', err)
+    res.status(500).json({ error: 'Could not delete shop' })
+  }
+})
+
+// ── Admin: audit log feed ────────────────────────────────────────────────────
+
+router.get('/audit-log', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const { action, take } = req.query
+  const logs = await prisma.auditLog.findMany({
+    where: action ? { action: String(action) } : {},
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Number(take) || 100, 500),
+  })
+  res.json(logs)
+})
+
+// ── Admin: support tickets ───────────────────────────────────────────────────
+
+router.get('/support-tickets', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const { status } = req.query
+  const tickets = await prisma.supportTicket.findMany({
+    where: status ? { status: String(status) } : {},
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: 200,
+  })
+  res.json(tickets)
+})
+
+router.post('/support-tickets/:id/reply', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const { reply } = req.body
+  if (!reply || typeof reply !== 'string' || reply.trim().length < 2) {
+    res.status(400).json({ error: 'Reply text required' })
+    return
+  }
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: req.params.id } })
+  if (!ticket) { res.status(404).json({ error: 'Ticket not found' }); return }
+
+  // Send the reply via email
+  try {
+    const { sendSupportTicketReply } = await import('../lib/email')
+    await sendSupportTicketReply({ to: ticket.email, name: ticket.name, reply: reply.trim(), originalSubject: ticket.subject || undefined })
+  } catch (e) {
+    console.error('[admin reply support] email send failed', e)
+  }
+
+  const updated = await prisma.supportTicket.update({
+    where: { id: ticket.id },
+    data: { adminReply: reply.trim(), repliedAt: new Date(), status: 'IN_PROGRESS' },
+  })
+  res.json(updated)
+})
+
+router.put('/support-tickets/:id/status', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  const { status } = req.body
+  const allowed = ['OPEN', 'IN_PROGRESS', 'CLOSED']
+  if (!allowed.includes(status)) { res.status(400).json({ error: 'Invalid status' }); return }
+  const ticket = await prisma.supportTicket.update({ where: { id: req.params.id }, data: { status } })
+  res.json(ticket)
 })
 
 export default router

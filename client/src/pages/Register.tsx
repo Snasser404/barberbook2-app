@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import PasswordField, { isPasswordValid } from '../components/PasswordField'
+import PhoneInput from '../components/PhoneInput'
 
 export default function Register() {
   const { register } = useAuth()
@@ -66,10 +67,11 @@ export default function Register() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input type="email" className="input" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
-            <input type="tel" className="input" placeholder="+1 555 000 0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          </div>
+          <PhoneInput
+            value={form.phone}
+            onChange={(v) => setForm({ ...form, phone: v })}
+            label="Phone (optional)"
+          />
           <PasswordField value={form.password} onChange={(v) => setForm({ ...form, password: v })} />
           <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
             {loading ? 'Creating account...' : 'Create account'}
